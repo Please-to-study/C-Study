@@ -774,3 +774,84 @@ string s, t = "a value";  // 字符串字面值转换成string类型
 while(cin >> s) // while 的条件部分把cin转换成布尔值
 ```
 
+### 4.11.3 显示转换
+
+#### 命名的强制类型转换
+
+```C++
+// 一个命名的强制类型转换具有如下形式：
+cast-name<type>(expression);
+// type 是转换的目标类型
+// expression 是要转换的值
+// cast-name 是 static_cast、dynamic_cast、const_cast、reinterpret_cast中的一种
+```
+
+####  static_cast
+
+任何具有明确定义的类型转换，只要不包含底层const，都可以使用static_cast。
+
+```C++
+// 进行强制类型转换以便执行浮点数除法
+double slope = static_cast<double>(j) / i;
+```
+
+当需要把一个较大的算术类型赋值给较小的类型时，static_cast非常有用。
+
+static_cast对于编译器无法自动执行的类型转换也非常有用。
+
+```C++
+// 使用static_cast找回存在于void*指针中的值
+void* p = &d; // 正确：任何非常量对象的地址都能存入void*
+double *dp = static_cast<double*>(p); //正确：将void*转换回初始的指针类型
+// 我们必须确保转换后所得的类型就是指针所指的类型
+```
+
+#### const_cast
+
+const_cast只能改变运算对象的底层const
+
+```C++
+const char *pc;
+char *p = const_cast<char*>(pc); // 正确：但是通过p写值是未定义的行为
+```
+
+只有const_cast能改变表达式的常量属性，使用其他形式的命名强制类型转换改变表达式的常量属性都将引发编译器错误。
+
+#### reinterpret_cast
+
+reinterpret_cast通常为运算对象的位模式提供较低层次上的重新解释。例如：
+
+```C++
+int *ip;
+char *pc = reinterpret_cast<char*>(ip);
+```
+
+我们必须牢记pc所指的真实对象是一个int而非字符，如果把pc当成普通的字符指针使用就可能在运行时发生错误。
+
+# 第5章 语句
+
+### 5.3.2 switch语句
+
+case关键字和它对应的值一起被成为**case标签**。case标签必须是整型常量表达式：
+
+```C++
+char ch = getVal();
+int ival = 42;
+switch(ch) {
+  case 3.14: // 错误：case标签不是一个整数
+  case ival: // 错误：case标签不是常量
+}
+```
+
+## 5.6 try语句块和异常处理
+
+在复杂系统中，程序在遇到抛出异常的代码前，其执行路径可能已经经过了多个try语句块。例如，一个try语句块可能调用了包含另一个try语句块的函数，新的try语句块可能调用了包含又一个try语句块的新函数，以此类推。
+
+寻找处理代码的过程与函数调用链刚好相反。当异常被抛出时，首先搜索抛出该异常的函数。如果没找到匹配的catch字句，终止该函数，并在调用该函数的函数中继续寻找。如果还是没有找到匹配的catch子句，这个新的函数也被终止，继续搜索调用它的函数。以此类推，沿着程序的执行路径逐层回退，直到找到适当类型的catch子句为止。
+
+如果最终还是没能找到任何匹配的catch子句，程序转到名为terminate的标准库函数，一般情况下，执行该函数将导致程序非正常退出。
+
+如果一段程序没有try语句块且发生了异常，系统会调用terminate函数并终止当前程序的执行。
+
+# 第6章 函数
+
