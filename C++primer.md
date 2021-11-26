@@ -1042,3 +1042,59 @@ argv[5] = 0;
 如果函数的实参数量未知但是全部实参的类型都相同，我们可以使用initializer_list类型的形参。initializer_list是一种标准库类型，用于表示某种特定类型的值的数组。
 
 ![](https://cdn.pkubailu.cn/img/6.1.png)
+
+和vector一样，initializer_list也是一种模板类型。定义initializer_list对象时，必须说明列表中所含元素的类型：
+
+```C++
+initializer_list<string> ls; // initializer_list 的元素类型是string
+initializer_list<int> li; // initializer_list的元素类型是int
+```
+
+和vector不一样的是，initializer_list对象中的元素永远是常量值，我们无法修改其中的值。
+
+```C++
+void error_msg(initializer_list<string> ls) {
+  for (auto beg = ls.begin(); beg != ls.end(); ++beg)
+    cout << *beg << endl;
+}
+// 想向initializer_list形参中传递一个值序列，则必须把序列放在一对花括号内
+// expected和actual是string对象
+if (expected != actual)
+  error_msg({"functionX", expected, actual});
+else
+  error_msg({"functionX", "okay"})
+```
+
+#### 省略符形参
+
+**省略符形参应该仅仅用于C和C++通用的类型。特别注意的是，大多数类类型的对象在传递给省略符形参时都无法正确拷贝**
+
+省略符形参只能出现在形参列表的最后一个位置，它的形式无外乎以下两种：
+
+```C++
+void foo(parm_list,...);
+void foo(...);
+```
+
+第一种形式指定了foo函数的部分形参的类型，对应于这些形参的实参将会执行正常的类型检查。省略符形参所对应的实参无需类型检查。
+
+### 6.3.2 有返回值函数
+
+#### 不要返回局部对象的引用或指针
+
+函数完成后，它所占用的存储空间也随之被释放掉。因此，函数终止意味着局部变量的引用将指向不再有效的内存区域：
+
+```C++
+const string &manip() {
+  string ret;
+  if (!ret.empty())
+    return ret;  // 错误：返回局部对象的引用！
+  else 
+    return "Empty"; // 错误： "Empty"是一个局部临时变量
+}
+```
+
+第一条return 语句来说，显然它返回的是局部对象的引用。
+
+第二条return 语句中，字符串字面值转换成一个局部临时string对象，该对象和ret一样都是局部的。
+
