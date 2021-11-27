@@ -1160,3 +1160,187 @@ decltype(odd) *arrPtr(int i){
 
 #### 定义重载函数
 
+对于重载的函数来说，它们应该在形参数量或形参类型上有所不同。不允许两个函数除了返回类型外其他所有的要素都相同。
+
+#### 判断两个形参的类型是否相异
+
+有时候两个形参列表看起来不一样，但实际上是相同的：
+
+```C++
+// 声明的是同一个函数
+Record lookup(const Account &acct);
+Record lookup(const Account &);  // 省略了形参的名字
+```
+
+#### 重载和const形参
+
+顶层const不影响传入函数的对象。一个拥有顶层const的形参无法和另一个没有顶层const的形参区分开来：
+
+```C++
+Record lookup(Phone);
+Record lookup(const Phone); 
+
+Record lookup(Phone*);
+Record lookup(Phone* const);
+```
+
+另一方面，如果形参是某种类型的指针或引用，则通过区分其指向的是常量对象还是非常量对象可以实现函数重载，此时的const是底层的：
+
+```C++
+// 对于接受引用或指针的函数来说，对象是常量还是非常量对应的形参不同
+// 定义了4个独立的重载函数
+Record lookup(Account &); // 函数作用于Account的引用
+Record lookup(Account &); // 新函数，作用于常量引用
+
+Record lookup(Account *); // 新函数，作用于指向Account的指针
+Record lookup(const Account *); // 新函数，作用于指向常量的指针
+```
+
+#### const_cast 和 重载
+
+const_cast 在重载函数的情景中最有用。举个例子：
+
+```C++
+// 比较两个string对象的长度，返回较短的那个引用
+const string &shorterString(const string &s1, const string &s2){
+  return s1.size() <= s2.size() ? s1 : s2;
+}
+```
+
+这个函数的参数和返回类型都是const string的引用。我们可以对两个非常量的string实参调用这个函数，但返回的结果仍然是const string 的引用。因此我们需要一种新的shorterString函数，当它的实参不是常量时，得到的结果是一个普通的引用，使用const_cast可以做到这一点：
+
+```C++
+string &shorterString(string &s1, string &s2){
+  auto &r = shorterString(const_cast<const string&>(s1),const_cast<const string&>(s2));
+  return const_cast<string&>r;
+}
+```
+
+在这个版本的函数中，首先将它的实参强制转换成对const的引用，然后调用了shorterString函数的const版本。const版本返回对const string的引用，这个引用事实上绑定在了某个初始的非常量实参上。因此，我们可以再将其转换回一个普通的string&，这显然是安全的。
+
+#### 调用重载的函数
+
+调用重载函数时有三种可能的结果：
+
+- 编译器找到一个与实参最佳匹配的函数，并生成调用该函数的代码。
+- 找不到任何一个函数与调用的实参匹配，此时编译器发出无匹配的错误信息。
+- 有多余一个函数可以匹配，但是没一个都不是最明显的最佳选择。此时也将发生错误，成为二义性调用。
+
+### 6.4.1 重载与作用域
+
+重载对作用域的一般性质并没有什么改变：如果我们在内层作用域中声明名字，它将隐藏外层作用域中声明的同名实体。在不同的作用域中无法重载函数名。
+
+> Note! 在C++语言中，名字查找发生在类型检查之前。
+
+## 6.5 特殊用途语言特性
+
+### 6.5.1 默认实参
+
+我们可以为一个或多个形参定义默认值，不过需要注意的是，一旦某个形参被赋予了默认值，他后面的所有形参都必须有默认值。
+
+```C++
+typedef string::size_type sz; 
+string screen(sz ht = 24, sz wid = 80, char background = ' ');
+```
+
+函数调用时实参按其位置解析，默认实参负责填补函数调用缺少的尾部实参，例如：要想覆盖background的默认值，必须为ht何wid提供实参：
+
+```C++
+window = screen(,,'?'); // 错误：只能省略尾部的实参
+window = screen('?'); // 调用screen('?',80,' ')
+```
+
+当设计含有默认实参的函数时，其中一项任务是合理设置形参的顺序，尽量让不怎么使用默认值的形参出现在前面，而让那些经常使用默认值的形参出现在后面。
+
+#### 默认实参声明
+
+一个函数通常只声明一次，但是多次声明同一个函数也是合法的。不过有一点需要注意，在给定的作用域中一个形参只能被赋予一次默认实参。换句话说，函数的后续声明只能为之前那些没有默认值得形参添加默认实参，而且该形参右侧的所有形参必须都有默认值。
+
+```C++
+string screen(sz,sz,char = '');
+string screen(sz,sz,char = '*'); // 错误：重复声明
+// 但是可以按照如下形式添加默认实参：
+string screen(sz = 24, sz = 80, char); //正确：添加默认实参
+```
+
+#### 默认实参初始值
+
+局部变量不能作为默认实参。除此之外，只要表达式的类型能转换成形参所需的类型，该表达式就能作为默认实参：
+
+```C++
+// wd、def、ht的声明必须出现在函数之外
+sz wd = 80;
+char def = ' ';
+sz ht();
+string screen(sz = ht(), sz = wd, char = def);
+string window = screen(); //调用 screen(ht(),80,' ')
+```
+
+用作默认实参的名字在函数声明所在的作用域内解析，而这些名字的求值过程发生在函数调用时：
+
+```C++
+void f2(){
+  def = '*'; // 改变默认实参的值
+  sz wd = 100; // 隐藏了外层定义的wd，但是没有改变默认值
+  window = screen(); // 调用了screen(ht(),80,'*');
+}
+```
+
+### 6.5.2 内联函数和 constexpr 函数
+
+#### 内联函数可避免函数调用的开销
+
+将函数指定为内联函数，通常就是将它在每个调用点上“内联地”展开。
+
+假设我们把shorterString函数定义成内联函数，则如下调用
+
+```C++
+cout << shorterString(s1,s2) << endl;
+```
+
+将在编译过程中展开成类似下面的形式
+
+```C++
+cout << (s1.size() < s2.size() ? s1 : s2) << endl;
+```
+
+从而消除了shorterString函数的运行时开销。
+
+在shorterString函数的返回类型前面加上关键字inline，这样就可以将它声明成内联函数了:
+
+```C++
+inline const string &
+shorterString(const string &s1, const string &s2){
+  return s1.size() < s2.size() ? s1 : s2; 
+}
+```
+
+一般来说，内联机制用于优化规模较小、流程直接、频繁调用的函数。
+
+#### constexpr 函数
+
+constexpr函数是指能用于常量表达式的函数。定义constexpr函数的方法与其他函数类似，不过要遵循几项约定：函数的返回类型及所有形参的类型都得是字面值类型，而且函数体中必须有且只有一条return语句：
+
+```C++
+constexpr int new_sz() {return 42;}
+constexpr int foo = new_sz(); // 正确： foo是一个常量表达式
+```
+
+执行该初始化任务时，编译器把对constexpr 函数的调用替换成其结果值。为了能在编译过程中随时展开，constexpr函数被隐士地指定为内联函数。
+
+我们允许constexpr函数的返回值并非一个常量：
+
+```C++
+// 如果arg是常量表达式，则scale(arg)也是常量表达式
+constexpr size_t scale(size_t cnt) {return new_sze() * cnt; }
+// 当scale的实参实参是常量表达式时，它的返回值也是常量表达式：反之则不然：
+int arr[scale(2)]; // 正确： scale(2)是常量表达式
+int i = 2; // i 不是常量表达式
+int a2[scale(i)] // 错误：scale(i)不是常量表达式
+```
+
+> Note! constexpr 函数不一定返回常量表达式
+
+#### 把内联函数和constexpr 函数放在头文件内
+
+对于某个给定的内联函数或者constexpr函数来说，它的多个定义必须完全一致。基于这个原因，内联函数和constexpr函数通常定义在头文件中。
