@@ -1344,3 +1344,203 @@ int a2[scale(i)] // 错误：scale(i)不是常量表达式
 #### 把内联函数和constexpr 函数放在头文件内
 
 对于某个给定的内联函数或者constexpr函数来说，它的多个定义必须完全一致。基于这个原因，内联函数和constexpr函数通常定义在头文件中。
+
+### 6.5.3 调试帮助
+
+#### assert 预处理宏
+
+assert是一种预处理宏。所谓预处理宏其实是一个预处理变量，他的行为有点类似于内联函数。assert宏使用一个表达式作为它的条件：
+
+```C++
+assert(expr);
+```
+
+首先对expr求值，如果表达式为假（即0），assert输出信息并终止程序的执行。如果表达式为真（即非0），assert什么也不做。
+
+和预处理变量一样，宏名字在程序内必须唯一。含有cassert头文件的程序不能再定义名为assert的变量、函数或者其他实体。在实际编译过程中，即使我们没有包含cassert头文件，也最好不要为了其他目的使用assert。很多头文件都包含了cassert，这就意味着即使你没有直接包含cassert，它也很有可能通过其他途径包含在你的程序中。
+
+```C++
+// assert宏常用于检查“不能发生”的条件。例如，一个对输入文本进行操作的程序可能要求所有给定单词的长度都大于某个阈值。此时，程序可以包含一条如下所示的语句：
+assert(word.size() > threshold)；
+```
+
+#### NDEBUG预处理变量
+
+assert的行为依赖于一个名为NDEBUG的预处理变量的状态。如果定义了NDEBUG，则assert什么也不做。默认状态下没有定义NDEBUG，此时assert将执行运行时检查。
+
+我们可以使用一个#define 语句定义NDEBUG，从而关闭调试状态。
+
+除了用于assert外，也可以使用NDEBUG编写自己的条件调试代码。如果NDEBUG未定义，将执行#ifndef和#endif之间的代码：如果定义了NDEBUG，这些代码将被忽略。
+
+## 6.6 函数匹配
+
+#### 确定候选函数和可行函数
+
+1. 选定本次调用对应的重载函数集。
+2. 考察本次调用提供的实参，然后从候选函数中选出能被这组实参调用的函数。
+3. 从候选函数中选择与本次调用最匹配的函数。
+
+#### 寻找最佳匹配（如果有的话）
+
+基本思想是：实参类型与形参类型越接近，他们匹配的越好。
+
+> Note! 调用重载函数时应尽量避免强制类型转换。如果在实际应用中确实需要强制类型转换，则说明我们设计的形参集合不合理。
+
+### 6.6.1 实参类型转换
+
+为了确定最佳匹配，编译器将实参类型到形参类型的转换划分为几个等级。
+
+1. 精确匹配，包括以下情况：
+   - 实参类型和形参类型相同。
+   - 实参从数组类型或函数类型转换成对应的指针类型。
+   - 向实参添加顶层const或者从实参中删除顶层const。
+2. 通过const转换实现的匹配。
+3. 通过类型提升实现的匹配。
+4. 通过算术类型转换或指针转换实现的匹配。
+5. 通过类类型转换实现的匹配。
+
+#### 函数匹配和const实参
+
+```C++
+Record lookup(Account&);
+Record lookup(const Account&);
+const Account a;
+Account b;
+
+lookup(a); // 调用lookup(const Account&)
+lookup(b); // 调用lookup(Account&)
+```
+
+在第一个调用中，我们传入的是const 对象a。因为不能把普通引用绑定到const对象上，所以此例中唯一可行的函数是以常量引用作为形参的那个函数。
+
+在第二个调用中，两个函数都是可行的，因为我们既可以使用b初始化常量引用也可以用它初始化非常量引用。然而，用非常量对象初始化常量引用需要类型转换。
+
+指针也同样如此！
+
+## 6.7 函数指针
+
+函数指针指向的是函数而非对象。和其他指针一样，函数指针指向某种特定类型。函数的类型由它的返回类型和形参共同决定，与函数名无关。
+
+```C++
+// 比较两个string对象的长度
+bool lengthCompare(const string &,const string &);
+```
+
+该函数的类型是bool（const string&, const string&）。要想声明一个可以指向该函数的指针，只需要用指针替换函数名即可：
+
+```C++
+// pf 指向一个函数，该函数的参数是两个const string的引用，返回值是bool类型
+bool (*pf) (const string &,const string &); // 未初始化
+```
+
+从我们声明的名字开始观察，pf前面有个*，因此pf是指针；右侧是形参列表，表示pf指向的是函数；在观察左侧，发现函数的返回类型是布尔值。因此，pf就是一个指向函数的指针，其中该函数的参数是两个const string的引用，返回值是bool类型。
+
+> Note! *pf 两端的括号必不可少。如果不写这对括号，则pf是一个返回值为bool指针的函数。
+
+#### 使用函数指针
+
+当我们把函数名作为一个值使用时，该函数自动的转换成指针。例如，按照如下形式我们可以将lengthCompare的地址赋给pf：
+
+```C++
+pf = lengthCompare; // pf 指向名为lengthCompare的函数
+pf = &lengthCompare; // 等价的赋值语句：取地址符是可选的
+```
+
+此外，我们还能直接使用指向函数的指针调用该函数，无需提前解引用指针：
+
+```C++
+bool b1 = pf("hello","goodbye"); // 调用lengthCompare函数
+bool b2 = (*pf)("hello","goodbye"); // 一个等价的调用
+bool b3 = lengthCompare("hello","goodbye"); // 另一个等价的调用
+```
+
+在指向不同函数类型的指针间不存在转换规则。但是和往常一样，我们可以为函数指针赋一个nullptr或者值为0的整型常量表达式，表示该指针没有指向任何一个函数。
+
+```C++
+string::size_type sumLength(const string&, const string&);
+bool cstringCompare(const char*, const char*);
+pf = 0; // 正确：pf不指向任何函数
+pf = sumlength; // 错误：返回类型不匹配
+pf = cstringCompare; // 错误：形参类型不匹配
+pf = lengthCompare; // 正确：函数和指针的类型精确匹配
+```
+
+#### 重载函数的指针
+
+当我们使用重载函数时，上下文必须清晰地界定到底应该选用哪个函数。如果定义了指向重载函数的指针
+
+```C++
+void ff(int*);
+void ff(unsigned int);
+
+void (*pf1)(unsigned int) = ff; // pf1 指向 ff(unsigned)
+```
+
+编译器通过指针类型决定选用哪个函数，指针类型必须与重载函数中的某一个精确匹配
+
+```C++
+void (*pf2)(int) = ff; // 错误：没有任何一个ff与该形参列表匹配
+double (*pf3)(int*) = ff; // 错误： 返回类型不匹配
+```
+
+#### 函数指针形参
+
+和数组类似，虽然不能定义函数类型的形参，但是形参可以是指向函数的指针。此时，形参看起来是函数类型，实际上却是当成指针使用：
+
+```C++
+// 第三个形参是函数类型，它会自动地转换成指向函数的指针
+void useBigger(const string &s1, const string &s2, bool pf(const string &, const string &));
+// 等价的声明：显示的将形参定义成指向函数的指针
+void useBigger(const string &s1, const string &s2, bool (*pf)(const string &, const string &)); 
+// 我们可以直接把函数作为实参使用，此时它会自动转换成指针：
+useBigger(s1,s2,lengthCompare);
+```
+
+正如useBigger的声明语句所示，直接使用函数指针类型显得冗余而繁琐。类型别名和decltype能让我们简化使用了函数指针的代码：
+
+```C++
+没有看懂！！！ P222页
+```
+
+#### 返回指向函数的指针
+
+和数组类似，虽然不能返回一个函数，但是能返回指向函数类型的指针。然而， 我们必须把返回类型写成指针形式，编译器不会自动地将函数返回类型当成对应的指针类型处理。与往常一样，要向声明一个返回函数指针的函数，最简单的办法是使用类型别名：
+
+```C++
+using F = int(int*, int); // F是函数类型，不是指针
+using PF = int(*)(int*, int); // PF是指针类型
+```
+
+必须时刻注意的是，和函数类型的形参不一样，返回类型不会自动地转换成指针，我们必须显示的将返回类型指定为指针：
+
+```C++
+PF f1(int); // 正确： PF 是指向函数的指针，f1返回指向函数的指针
+F f1(int); // 错误：F是函数类型，f1不能返回一个函数
+F *f1(int); // 正确：显示的指定返回类型是指向函数的指针
+```
+
+当然，我们也能用下面的形式直接声明f1:
+
+```C++
+int (*f1(int))(int*, int);
+// 按照由内向外的顺序阅读这条声明语句：我们看到f1有形参列表，所以f1是一个函数：f1前面有*，所以f1返回一个指针，进一步观察发现，指针的类型本身也含有形参列表，因此指针指向函数，该函数的返回类型是int
+```
+
+我们还可以使用尾置返回类型的方式
+
+```C++
+auto f1(int) -> int (*)(int*, int);
+```
+
+#### 将auto和decltype用于函数指针类型
+
+如果我们明确知道返回的函数是哪一个，就能使用decltype简化书写函数指针返回类型的过程。
+
+```C++
+string::size_type sumLength(const string&, const string&);
+string::size_type largeLength(const string&, const string&);
+// 根据其形参的取值，getFcn函数返回指向 sumLength 或者 largeLength的指针
+decltype(sumLength) *getFcn(const string &);
+```
+
+声明getFcn唯一需要注意的地方是，牢记当我们将decltype作用于某个函数时，它返回函数类型而非指针类型。因此，我们需要显示的加上*以表明我们需要返回指针。
