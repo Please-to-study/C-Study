@@ -1687,3 +1687,103 @@ decltype(sumLength) *getFcn(const string &);
 
 # 第7章 类
 
+## 7.1 定义抽象数据类型
+
+### 7.1.2 定义改进的 Sales_data 类
+
+定义和声明成员函数的方式与普通函数差不多。成员函数的声明必须在类的内部，它的定义既可以在类的内部也可以在类的外部。作为接口组成部分的非成员函数，例如add、read和print等，它们的定义和声明都在类的外部。
+
+```C++
+// 改进的Sales_data类如下所示
+struct Sales_data {
+  std::string isbn() const { return bookNo; }
+  Sales_data& combine(const Sales_data&);
+  double avg_price() const;
+  std::string bookNo;
+  unsigned units_sold = 0;
+  double revenue = 0.0;
+};
+// Sales_data的非成员接口函数
+Sales_data add(const Sales_data&, const Sales_data&);
+std::ostream &print(std::ostream&, const Sales_data&);
+std::istream &read(std::istream&, Sales_data&);
+```
+
+> 定义在类内部的函数是隐式的inline函数
+
+#### 定义成员函数
+
+尽管所有成员都必须在类的内部声明，但是成员函数可以定义在类内也可以定义在类外。对于Sales_data类来说，isbn函数定义在了类内，而combine和avg_price定义在了类外。
+
+```C++
+std::string isbn() const { return bookNo; }
+```
+
+isbn函数是如何获得bookNo成员所依赖的对象的呢？
+
+#### 引入this
+
+```C++
+// 调用isbn函数
+total.isbn()
+```
+
+当我们调用成员函数时，实际上是在替某个对象调用它。如果isbn指向Sales_data的成员(例如bookNo)，则它隐士地指向调用该函数的对象的成员。
+
+成员函数通过一个名为**this**的额外的隐式参数来访问调用它的那个对象。当我们调用一个成员函数时，用请求该函数的对象地址初始化this。
+
+```C++
+total.isbn()
+// 编译器负责把total的地址传递给isbn的隐士形参this，可以认为编译器将该调用重写成了如下的形式
+Sales_data::isbn(&total)
+```
+
+任何对类成员的直接访问都被看作this的隐式调用，也就是说，当isbn使用bookNo时，它隐式的使用this指向的成员，就像我们书写了this->bookNo一样。
+
+对于我们来说，this形参是隐式定义的。实际上，任何自定义名为this的参数或变量的行为都是非法的。我们可以在成员函数体内部使用this，因此尽管没有必要，但我们还是能把isbn定义成如下的形式：
+
+```C++
+std::string isbn() const { return this->bookNo; }
+```
+
+因为this的目的总是指向“这个”对象，所以this是一个常量指针，我们不允许改变this中保存的地址。
+
+#### 引入const 成员函数
+
+isbn函数的另一个关键之处是紧随参数列表之后的const关键字，这里，const的作用是修改隐式this指针的类型。
+
+默认情况下，this的类型是指向类类型非常量版本的常量指针。例如在Sales_data成员函数中，this的类型是Sales_data *const。尽管this是隐士地，但它仍然需要遵循初始化规则，意味着（在默认情况下）我们不能把this绑定到一个常量对象上。这一情况也就使得我们不能在一个常量对象上调用普通的成员函数。
+
+如果isbn是一个普通函数而且this是一个普通的指针参数，则我们应该把this声明成const Sales_data *const。毕竟，在isbn的函数体内不会改变this所指的对象，所以把this设置为指向常量的指针有助于提高函数的灵活性。
+
+所以，紧跟在参数列表后面的const表示this是一个指向常量的指针。像这样使用const的成员函数被称为**常量成员函数**。
+
+因为this是指向常量的指针，所以常量成员函数不能改变调用它的对象的内容。在上例中，isbn可以读取调用它的对象的数据成员，但是不能写入新值。
+
+#### 类作用域和成员函数
+
+编译器分两步处理类：首先编译成员的声明，然后才轮到成员函数体（如果有的话）。因此，成员函数体内可以随意使用类中的其他成员而无须在意这些成员出现的次序。
+
+#### 在类的外部定义成员函数
+
+如果成员被声明成常量成员函数，那么它的定义也必须在参数列表后明确指定const属性。同时，类外部定义的成员名字必须包含它所属的类名。
+
+#### 定义一个返回this对象的函数
+
+```C++
+Sales_data& Sales_data::combine(const Sales_data &rhs){
+  units_sold += rhs.units_sold; // 把rhs成员加到this对象的成员上
+  revenue += rhs.revenue;
+  return *this; // 返回调用该函数的对象
+  // return语句解引用this指针以获得执行该函数的对象，换句话说，上面的这个调用返回total的引用
+}
+```
+
+### 7.1.3 定义类相关的非成员函数
+
+类的作者常常需要定义一些辅助函数，比如add、read、和print等。尽管这些函数定义的操作从概念上来说属于类的接口的组成部分，但它们实际上并不属于类本身。
+
+我们定义非成员函数的方式与定义其它函数一样，通常把函数的声明和定义分离开来。如果函数在概念上属于类但是不定义在类中，则它一般应与类声明（而非定义）在同一个头文件内。
+
+### 7.1.4 构造函数
+
