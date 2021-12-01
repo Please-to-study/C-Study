@@ -2085,3 +2085,246 @@ myScreen.display(cout).set('#');
 即使myScreen是个非常量对象，对set的调用也无法通过编译。问题在于display的const版本返回的是常量引用，而我们显然无权set一个常量对象。
 
 > 一个const成员函数如果以引用的形式返回*this，那么他的返回类型将是常量引用。
+
+#### 基于const的重载
+
+通过区分成员函数是否是const的，我们可以对其进行重载。
+
+因为非常量版本的函数对于常量对象是不可用的，所以我们只能在一个常量对象上调用const成员函数。另一方面，虽然可以在非常量对象上调用常量版本或非常量版本，但显然此时非常量版本是一个更好的匹配。
+
+```C++
+class Screen {
+public:
+  // 根据对象是否是const 重载了display函数
+  Screen &display(std::ostream &os) 
+  { do_display(os); return *this; }
+  const Screen &display(std::ostream &os) const 
+  { do_display(os); return *this; }
+private:
+  // 该函数负责显示Screen的内容
+  void do_display(std::ostream &os) const 
+  { os << contents; }
+}
+```
+
+当do_display完成后，display函数各自返回解引用this所得的对象。在非常量版本中，this指向一个非常量对象，因此display返回一个普通的（非常量）引用；而const成员则返回一个常量引用。
+
+当我们在某个对象上调用display时，该对象是否是const决定了应该调用display的哪个版本。
+
+### 7.3.3 类类型
+
+每个类定义了唯一的类型。对于两个类来说，即使他们的成员完全一样，这两个类也是两个不同的类型。
+
+我们可以把雷明作为类型的名字使用，从而直接指向类类型。或者，我们也可以把类名跟在关键字class或struct后面：
+
+```C++
+Sales_data item1;
+class Sales_data item1;
+// 两条声明完全等价
+```
+
+#### 类的声明
+
+就像可以把函数的声明和定义分离开来一样，我们也能仅仅声明类而暂时不定义它。
+
+这种声明被称为**前向声明**，他向程序中引入了类的名字（Screen）并且指明Screen是一种类类型，对于类型Screen来说，在它声明之后定义之前是一个**不完全类型**。
+
+不完全类型只能在非常有限的情境下使用：可以定义指向这种类型的指针或引用，也可以声明（但是不能定义）以不完全类型作为参数或者返回类型的函数。
+
+### 7.3.4 友元再探
+
+类可以把普通的非成员函数定义成友元。类还可以把其他的类定义成友元，也可以把其他类的成员函数定义成友元。此外，友元函数能定义在类的内部，这样的函数是隐式内联的。
+
+#### 类之间的友元关系
+
+我们的Window_mgr类的某些成员可能需要访问它管理的Screen类的内部数据。例如：Window_mgr类中的函数clear需要访问Screen的私有成员；要想令这种访问合法，Screen需要把Window_mgr指定成它的友元：
+
+```C++
+class Screen {
+  // Window_mgr 的成员可以访问Screen类的私有部分
+  friend class Window_mgr;
+}
+```
+
+如果一个类指定了友元类，则友元类的成员函数可以访问此类包括非共有成员在内的所有成员。
+
+```C++
+class Window_mgr {
+public:
+  using ScreenIndex = std::vector<Screen>::size_type;
+  void clear(ScreenIndex);
+private:
+  std::vector<Screen> screens{Screen(24, 80 ,'')};
+}
+void Window_mgr::clear(ScreenIndex) {
+  Screen &s = screens[ScreenIndex];
+  s.contents = string(s.ht * s.wd, '');
+}
+```
+
+如果clear不是Screen的友元，上面的代码将无法通过编译，因为此时clear将不能访问Screen的成员。
+
+必须要注意的一点是，友元关系不存在传递性。也就是说，如果Window_mgr有它自己的友元，则这些友元不能理所当然地具有访问Screen的特权。
+
+#### 令成员函数作为友元
+
+除了令整个Window_mgr作为友元之外，Screen还可以只为clear提供访问权限。当把一个成员函数声明成友元时，我们必须明确指出该成员函数属于哪个类：
+
+```C++
+class Screen {
+  // Windoew_mgr::clear 必须在Screen类之前被声明
+  friend void Windoew_mgr::clear(ScreenIndex);
+  ....
+}
+```
+
+要想令某个成员函数作为友元，我们必须仔细组织程序的结构以满足声明和定义的彼此依赖关系。在这个例子中，我们必须按照如下方式设计程序：
+
+- 首先定义Window_mgr类，其中声明clear函数，但是不能定义它。在clear使用Screen的成员之前必须先声明Screen。
+- 接下来定义Screen，包括对于clear的友元声明。
+- 最后定义clear，此时它才可以使用Screen的成员。
+
+#### 函数重载和友元
+
+尽管重载函数的名字相同，但它们仍然是不同的函数，因此，如果一个类想把一组重载函数声明成它的友元，它需要对这组函数中的每一个分别声明。
+
+#### 友元声明和作用域
+
+类和非成员函数的声明不是必须在他们的友元声明之前。当一个名字第一次出现在一个友元声明中时，我们隐式地假定改名字在当前作用域中是可见的。然而，友元本身不一定真的声明在当前作用域中。
+
+甚至就算在类的内部定义该函数，我们也必须在类的外部提供相应的声明从而使得函数可见。换句话说，即使我们仅仅是用声明友元的类的成员调用该友元函数，它也必须是被声明过的：
+
+```C++
+struct X {
+  friend void f() {/* 友元函数可以定义在类的内部 */}
+  X() { f(); } // 错误：f还没有被声明
+  void g();
+  void h();
+};
+void X::g() {return f();} // 错误：f还没有被声明
+void f(); // 声明那个定义在X中的函数
+void X::h() { return f(); } // 正确：现在f的声明在作用域中了
+```
+
+关于这段代码最重要的是理解友元声明的作用是影响访问权限，它本身并非普通意义上的声明。
+
+## 7.4 类的作用域
+
+每个类都会定义它自己的作用域。在类的作用域之外，普通的数据和函数成员只能由对象、引用或者指针使用成员访问运算符来访问。
+
+#### 作用域和定义在类外部的成员
+
+一旦遇到了类名，定义的剩余部分就在类的作用域之内了，这里的剩余部分包括参数列表和函数体。结果就是，我们可以直接使用类的其他成员而无须再次授权了。
+
+另一方面，函数的返回类型通常出现在函数名之前。因此当成员函数定义在类的外部时，返回类型中使用的名字都位于类的作用域之外。这时，返回类型必须指明它是哪个类的成员。
+
+```C++
+// 例如
+class Window_mgr {
+public:
+  // 向窗口添加一个Screen,返回它的编号
+  ScreenIndex addScreen(const Screen&);
+};
+// 首先处理返回类型，之后我们才进入Window_mgr的作用域
+Window_mgr::ScreenIndex
+Window_mgr::addScreen(const Screen& s) {
+  screens.push_back(s);
+  return screens.size() - 1;
+}
+```
+
+因为返回类型出现在类名之前，所以事实上它是位于Window_mgr类的作用域之外的。
+
+### 7.4.1 名字查找与类的作用域
+
+在目前为止，我们编写的程序中，**名字查找**（寻找与所用名字最匹配的声明的过程）的过程比较直截了当：
+
+- 首先，在名字所在的块中寻找其声明语句，只考虑在名字的使用之前出现的声明。
+- 如果没找到，继续查找外层作用域。
+- 如果最终没有找到匹配的声明，则程序报错。
+
+对于定义在类内部的成员函数来说，解析其中的名字的方式与上述的查找规则有所区别。类的定义分两步处理：
+
+- 首先，编译成员的声明。
+- 直到类全部可见后才编译函数体。
+
+> 编译器处理完类中的全部声明后才会处理成员函数的定义。
+
+#### 用于类成员声明的名字查找
+
+这种两阶段的处理方式只适用于成员函数中使用的名字。声明中使用的名字，包括返回类型或者参数列表中使用的名字，都必须在使用前确保可见。如果某个成员的声明使用了类中尚未出现的名字，则编译器将会在定义该类的作用域中继续查找。
+
+```C++
+typedef double Money;
+string bal;
+class Account {
+public:
+  Money balance() { return bal; }
+private:
+  Money bal;
+  // .....
+};
+```
+
+当编译器看到balance函数的声明语句时，他将在Account类的范围内寻找对Money的声明。编译器只考虑Account中在使用Money前出现的声明，因为没找到匹配的成员，所以编译器会接着到Account的外层作用域中查找。另一方面，balance函数体在整个类可见后才被处理，因此，该函数的return语句返回名为bal的成员，而非外层作用域的string对象。
+
+#### 类型名要特殊处理
+
+一般来说，内层作用域可以重新定义外层作用域中的名字，即使该名字已经在内层作用域中使用过。然而在类中，如果成员使用了外层作用域中的某个名字，而该名字代表一种类型，则类不能在之后重新定义该名字：
+
+```C++
+typedef double Money;
+class Account {
+public:
+  Money balance() { return bal; } // 使用外层作用域中的名字
+private:
+  typedef double Money; // 错误：不能重新定义Money
+  Money bal;
+  // .....
+};
+```
+
+需要特别注意的是，即使Account中定义的Money类型与外层作用域一致，上述代码仍然是错误的。
+
+> 类型名的定义通常出现在类的开始处，这样就能确保所有使用该类型的成员都出现在类名的定义之后。
+
+#### 成员定义中的普通块作用域的名字查找
+
+成员函数中使用的名字按照如下方式解析：
+
+- 首先，在成员函数内查找该名字的声明。和前面一样，只有在函数使用之前出现的声明才被考虑。
+- 如果在成员函数内没有找到，则在类内继续查找，这时类的所有成员都可以被考虑。
+- 如果类内也没找到该名字的声明，在成员函数定义之前的作用域内继续查找。
+
+一般来说不建议使用其他成员的名字作为某个成员函数的参数。
+
+```C++
+// 通常情况下不建议为参数和成员使用同样的名字
+int height;
+class Screen {
+public:
+  typedef std::string::size_type pos;
+  void dummy_fcn(pos height) {
+    cursor = width * height; // 哪个height?
+  }
+private:
+  pos cursor = 0;
+  pos height = 0, width = 0;
+};
+```
+
+当编译器处理dummy_fcn中的乘法表达式时，他首先在函数作用域内查找表达式中用到的名字。函数的参数位于函数作用域内，因此dummy_fcn函数体内用到的名字height指的是参数声明。
+
+在上述代码中，height参数隐藏了同名的成员。如果想绕开上面的查找规则应该将代码变为：
+
+```C++
+void Screen::dummy_fcn(pos height) {
+  cursor = width * this->height; // 成员height
+  cursor = width * Screen::height; // 成员height
+}
+```
+
+> 尽管类的成员被隐藏了，但我们任然可通过加上类的名字或显示的使用this指针来强制访问成员。
+
+#### 类作用域之后，在外围的作用域中查找
+
