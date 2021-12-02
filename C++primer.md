@@ -2104,7 +2104,7 @@ private:
   // 该函数负责显示Screen的内容
   void do_display(std::ostream &os) const 
   { os << contents; }
-}
+};
 ```
 
 当do_display完成后，display函数各自返回解引用this所得的对象。在非常量版本中，this指向一个非常量对象，因此display返回一个普通的（非常量）引用；而const成员则返回一个常量引用。
@@ -2252,7 +2252,7 @@ Window_mgr::addScreen(const Screen& s) {
 
 #### 用于类成员声明的名字查找
 
-这种两阶段的处理方式只适用于成员函数中使用的名字。声明中使用的名字，包括返回类型或者参数列表中使用的名字，都必须在使用前确保可见。如果某个成员的声明使用了类中尚未出现的名字，则编译器将会在定义该类的作用域中继续查找。
+这种两阶段的处理方式只适用于成员函数体中使用的名字。声明中使用的名字，包括返回类型或者参数列表中使用的名字，都必须在使用前确保可见。如果某个成员的声明使用了类中尚未出现的名字，则编译器将会在定义该类的作用域中继续查找。
 
 ```C++
 typedef double Money;
@@ -2485,7 +2485,7 @@ public:
 
 ```C++
 string null_book = "9-999-9999-9";
-// 构造一个零食的Sales_data对象
+// 构造一个临时的Sales_data对象
 // 该兑现的units_sold和revenue等于0,bookNo等于null_book
 item.combine(null_book);
 ```
@@ -2608,3 +2608,160 @@ constexpr 函数的参数和返回值必须是字面值类型。和其他类不�
 #### constexpr 构造函数
 
 尽管构造函数不能是const的，但是字面值常量类的构造函数可以是constexpr函数。事实上，一个字面值常量类必须至少提供一个constexpr构造函数。
+
+constexpr构造函数可以声明成=default的形式。否则，constexpr构造函数就必须既符合构造函数的要求（意味着不能包含返回语句），又符合constexpr函数的要求（意味着它能拥有的唯一可执行语句就是返回语句）。综合这两点可知，constexpr构造函数体一般来说应该是空的。
+
+```C++
+class Debug {
+public:
+  constexpr Debug(bool b = true): hw(b), io(b), other(b) {}
+  constexpr Debug(bool h, bool i, bool o): hw(h), io(i), other(o) {}
+  constexpr bool any() { return hw || io || other; }
+  void set_io(bool b) { io = b; }
+  void set_hw(bool b) { hw = b; }
+  void set_other(bool b) { other = b; }
+ 
+private:
+  bool hw;
+  bool io;
+  bool other;
+};
+```
+
+constexpr 构造函数必须初始化所有数据成员，初始值或者使用constexpr构造函数，或者是一条常量表达式。
+
+constexpr构造函数用于生成constexpr对象以及constexpr函数的参数或返回类型。
+
+## 7.6 类的静态成员
+
+有的时候类需要它的一些成员与类本身直接相关，而不是与类的各个对象保持关联。
+
+#### 声明静态成员
+
+我们通过在成员的声明之前加上关键字static使得其与类关联在一起。和其他成员一样，静态成员可以是public的或private的。静态成员的类型可以是常量、引用、指针、类类型等。
+
+```C++
+class Account {
+public:
+  void calculate() { amount += amount * interestRate; }
+  static double rate() { return interestRate; }
+  static void rate(double);
+private:
+  std::string owner;
+  double amount;
+  static double interestRate;
+  static double initRate();
+};
+```
+
+类的静态成员存在于任何对象之外，对象中不包含任何与静态数据成员有关的数据。因此，每个Account对象将包含两个数据成员：owner和amount。只存在一个interestRate对象而且它被所有Account对象共享。
+
+类似的，静态成员函数也不与任何对象绑定在一起，他们不包含this指针。作为结果，静态成员函数不能声明成const的，而且我们也不能在static函数体内使用this指针。这一限制既适用于this的显示使用，也对调用非静态成员的隐式使用有效。
+
+#### 使用类的静态成员
+
+我们使用作用域运算符直接访问静态成员：
+
+```C++
+double r;
+r = Account::rate(); 
+```
+
+虽然静态成员不属于类的某个对象，但是我们仍然可以使用类的对象、引用或者指针来访问静态成员：
+
+```C++
+Account ac1;
+Account *ac2 = &ac1;
+r = ac1.rate();
+r = ac2->rate();
+```
+
+成员函数不用通过作用域运算符就能直接使用静态成员：
+
+```C++
+class Account {
+public:
+  void calculate() { amount += amount * interestRate; }
+private:
+  static double interestRate;
+}
+```
+
+#### 定义静态成员
+
+和其他的成员函数一样，我们既可以在类的内部也可以在类的外部定义静态成员函数。当在类的外部定义静态成员时，不能重复static关键字，该关键字只出现在类内部的声明语句：
+
+> 和类的所有成员一样，当我们指向类外部的静态成员时，必须指明成员所属的类名。static关键字则只出现在类内部的声明语句中。
+
+因为静态数据成员不属于类的任何一个对象，所以他们并不是在创建类的对象时被定义的。这意味着它们不是由类的构造函数初始化的。而且一般来说，我们不能在类的内部初始化静态成员。相反的，必须在类的外部定义和初始化每个静态成员。和其他对象一样，一个静态数据成员只能定义一次。
+
+类似于全局变量，静态数据成员定义在任何函数之外。因此一旦它被定义，就将一直存在于程序的整个生命周期中。
+
+我们定义静态数据成员的方式和在类的外部定义成员函数差不多。我们需要指定对象的类型名，然后是类名、作用域运算符以及成员自己的名字：
+
+```C++
+double Account::interestRate = initRate();
+```
+
+这条语句定义了名为interestRate的对象，该对象是类Account的静态成员，其类型是double。从类名开始，这条定义语句的剩余部分就都位于类的作用域之内了。因此，我们可以访问类Account中的所有成员。
+
+#### 静态成员的类内初始化
+
+通常情况下，类的静态成员不应该在类的内部初始化。然而，我们可以为静态成员提供const整数类型的类内初始值，不过要求静态成员必须是字面值常量类型的constexpr。初始值必须是常量表达式，因为这些成员本身就是常量表达式，所以他们能用在所有适合于常量表达式的地方。
+
+```C++
+class Account {
+public:
+  static double rate() { return interestRate; }
+  static void rate(double);
+private:
+  static constexpr int period = 30;
+  double daily_tbl[period];
+};
+```
+
+如果某个静态成员的应用场景仅限于编译器可以替换它的值的情况，则一个初始化的const或constexpr static不需要分别定义。相反，如果我们将它用于值不能替换的场景中，则该成员必须有一条定义语句。
+
+例如：如果period的唯一用途就是定义daily_tbl的维度，则不需要在Account外面专门定义period。此时，如果我们忽略了这条定义，那么对程序非常微小的改动也可能造成编译错误，因为程序找不到该成员的定义语句。举个例子，当需要把Account::period传递给一个接受const int&的函数时，必须定义period。
+
+如果在类的内部提供了一个初始值，则成员的定义不能再指定一个初始值了：
+
+```C++
+constexpr int Account::period; // 初始值在类的定义内提供
+```
+
+> 即使一个常量静态数据成员在类的内部被初始化了，通常情况下也应该在类的外部定义一下该成员。
+
+####  静态成员能用于某些场景，而普通成员不能
+
+某些非静态数据成员可能非法的场合，静态成员却可以正常使用。
+
+静态数据成员可以是不完全类型。特别的，静态数据成员的类型可以就是他所属的类类型。而非静态数据成员则受到限制，只能声明成它所属类的指针或引用：
+
+```C++
+class Bar {
+public:
+  // ...
+private:
+  static Bar mem1; // 正确： 静态成员可以是不完全类型
+  Bar *mem2; // 正确： 指针成员可以是不完全类型
+  Bar mem3;  // 错误：数据成员必须是完全类型
+}
+```
+
+静态成员和普通成员的另外一个区别是我们可以使用静态成员作为默认实参：
+
+```C++
+class Screen {
+public:
+  // bkground 表示一个在类中稍后定义的静态成员
+  Screen& clear(char = bkground);
+private:
+  static const char bkground;
+};
+```
+
+非静态数据成员不能作为默认实参，因为它的值本身属于对象的一部分，这么做的结果是无法真正提供一个对象以便从中获取成员的值，最终将引发错误。
+
+# 第8章 IO库
+
