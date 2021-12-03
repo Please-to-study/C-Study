@@ -3113,3 +3113,122 @@ Forward_list 迭代器不支持递减运算符。
 
 ### 9.2.2 容器类型成员
 
+通过类型别名，我们可以在不了解容器中元素类型的情况下使用它。
+
+为了使用这些类型，我们必须显示使用其类名：
+
+```c++
+// iter是通过list<string>定义的一个迭代器类型
+list<string>::iterator iter;
+// count是通过vector<int>定义的一个difference_type类型
+vector<int>::difference_type count;
+```
+
+#### 9.2.3 begin 和 end 成员
+
+begin和end操作生成指向容器中第一个元素和尾元素之后位置的迭代器。这两个迭代器最常见的用途是形成一个包含容器中所有元素的迭代器范围。
+
+实际上有两个名为begin的成员。一个是const成员，返回容器的const_iterator类型。另一个是非常量成员，返回容器的iterator类型。
+
+用c开头的版本是C++新标准库引入的，用以支持auto与begin和end函数结合使用。
+
+```C++
+// 显示指定类型
+list<string>::iterator it5 = a.begin();
+list<string>::const_iterator it6 = a.cbegin();
+// 是iterator还是const_iterator依赖于a的类型
+auto it7 = a.begin(); // 仅当a时const时，it7是const_iterator
+auto it8 = a.cbegin(); // it8是const_iterator
+```
+
+当auto与begin和end结合使用时，获得的迭代器类型依赖于容器类型，与我们想要如何使用迭代毫不相干。但c开头的版本还是可以获得const_iterator的，而不管容器的类型是什么。
+
+#### 9.2.4 容器定义和初始化
+
+每个容器类型都定义了一个默认构造函数。除array之外，其他容器的默认构造函数都会创建一个指定类型的空容器，且都可以接受指定容器大小和元素初始值的参数。
+
+![](https://cdn.pkubailu.cn/img/9.3.png)
+
+#### 将一个容器初始化为另一个容器的拷贝
+
+将一个新容器创建为另一个容器的拷贝的方法有两种：可以直接拷贝整个容器，或者拷贝由一个迭代器对指定的元素范围。
+
+为了创建一个容器为另一个容器的拷贝，两个容器的类型及其元素类型必须匹配。不过，当传递迭代器参数来拷贝一个范围时，就不要求容器类型是相同的了。而且，新容器和原容器中的元素类型也可以不同，只要能将要拷贝的元素转换为要初始化的容器得元素类型即可。
+
+```C++
+list<string> authors = {"Milton", "Shakespeare", "Austen"};
+vector<const char*> articles = {"a", "an", "the"};
+list<string> list2(authors); // 正确：类型匹配
+deque<string> authList(authors); // 错误：容器类型匹配
+vector<string> words(articles); // 错误：容器元素类型不匹配
+// 正确： 可以将const char*元素转换为string
+forward_list<string> words(articles.begin(), articles.end());
+```
+
+> 当将一个容器初始化为另一个容器的拷贝时，两个容器的容器类型和元素类型都必须相同。
+
+当两个迭代器表示一个范围时，我们可以使用这种构造函数来拷贝一个容器中的子序列。
+
+#### 列表初始化
+
+在新标准中，我们可以对一个容器进行列表初始化
+
+```C++
+list<string> authors = {"Milton", "Shakespeare", "Austen"};
+vector<const char*> articles = {"a", "an", "the"};
+```
+
+当这样做时，我们就显示的指定了容器中每个元素的值。对于除array之外的容器类型，初始化列表还隐含的指定了容器的大小：容器将包含与初始值一样多的元素。
+
+#### 与顺序容器大小相关的构造函数
+
+除了与关联容器相同的构造函数外，顺序容器（array除外）还提供另一个构造函数，它接受一个容器大小和一个（可选的）元素初始值。如果我们不提供元素初始值，则标准库会创建一个值初始化器：
+
+```C++
+vector<int> ivec(10, -1); // 10个int元素，每个都初始化为-1
+list<string> svec(10, "hi!"); // 10个string，每个都初始化为"hi!"
+forward_list<int> ivec(10); // 10个int元素，每个都初始化为0
+deque<string> svec(10); // 10个元素，每个都初始化为空string
+```
+
+如果元素类型是内置类型或者是具有默认构造函数的类类型，可以只为构造函数提供一个容器大小参数。如果元素类型没有默认构造函数，除了大小参数外，还必须指定一个显示的元素初始值。
+
+> 只有顺序容器的构造函数才接受大小参数，关联容器并不支持。
+
+#### 标准库 array具有固定大小
+
+与内置数组一样，标准库array的大小也是类型的一部分。当定义一个array时，除了指定元素类型，还要指定容器大小：
+
+```C++
+array<int, 42> // 类型为：保存42个int的数组
+array<string, 10> // 类型为：保存10个string的数组
+```
+
+为了使用array类型，我们必须同时指定元素类型和大小：
+
+```C++
+array<int, 10>::size_type i; // 数组类型包括元素类型和大小
+array<int>::size_type j; // 错误：array<int>不是一个类型
+```
+
+与其他容器不同，一个默认构造的array是非空的：它包含了与其大小一样多的元素。这些元素都被默认初始化，就像一个内置数组一样。如果元素类型是一个类类型，那么该类必须有一个默认构造函数，以使值初始化能够进行：
+
+```C++
+array<int, 10> ia1; // 10个默认初始化的int
+array<int, 10> ia2 = {0,1,2,3,4,5,6,7,8,9}; // 列表初始化
+array<int, 10> ia3 = {42}; // ia3[0]为42，剩余元素为0
+```
+
+值得注意的是，虽然我们不能对内置数组类型进行拷贝或对象赋值操作，但array并无此限制：
+
+```C++
+int digs[10] = {0,1,2,3,4,5,6,7,8,9};
+int cpy[10] = digs; // 错误：内置数组不支持拷贝或赋值
+array<int, 10> digits = {0,1,2,3,4,5,6,7,8,9}; 
+array<int, 10> copy = digits; // 正确：只要数组类型匹配即合法
+```
+
+与其他容器一样，array也要求初始值的类型必须与要创建的容器类型相同。此外，array还要求元素类型和大小也都一样，因为大小是array类型的一部分。
+
+### 9.2.5 赋值和swap
+
