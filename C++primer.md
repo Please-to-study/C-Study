@@ -3390,7 +3390,7 @@ if (!c.empty()) {
 }
 ```
 
-与往常一样，如果我们使用suto变量来保存这些函数的返回值，并且希望使用此变量来改变元素的值，必须记得将变量定义为引用类型。
+与往常一样，如果我们使用auto变量来保存这些函数的返回值，并且希望使用此变量来改变元素的值，必须记得将变量定义为引用类型。
 
 #### 下标操作和安全的随机访问
 
@@ -3460,3 +3460,153 @@ ilist.resize(5); // 从ilist末尾删除20个元素
 
 #### 不要保存end返回的迭代器
 
+当我们添加/删除vector或string的元素后，或在deque中首元素之外任何位置添加/删除元素后，原来end返回的迭代器总是会失效。因此，添加或删除元素的循环程序必须反复调用end，而不能在循环之前保存end返回的迭代器，一直当做容器末尾使用。
+
+```C++
+// 灾难：次循环的行为是未定义的
+auto begin = v.begin(), end = v.end();
+while(begin != end) {
+  // 做一些处理
+  // 插入新值，对begin重新赋值，否则的话它就会失效
+  ++begin;
+  begin = v.insert(begin, 42); // 插入新值
+  ++begin; // 向前移动begin跳过我们刚刚加入的元素
+}
+```
+
+此代码的行为是未定义的。在很多标准库实现上，此代码会导致无限循环。问题在于我们将end操作返回的迭代器保存在一个名为end的局部变量中。在循环体中，我们向容器中添加了一个元素，这个操作使保存在end中的迭代器失效了。
+
+## 9.4 vector对象是如何增长的
+
+当不得不获取新的内存空间时，vector和string的实现通常会分配比新的空间需求更大的内存空间。容器预留这些空间作为备用，可用来保存更多的新元素。这样，就不需要每次添加新元素都重新分配容器的内存空间了。
+
+#### 管理容量的成员函数
+
+![](https://cdn.pkubailu.cn/img/9.10.png)
+
+> reserve并不改变容器中元素的数量，它仅影响vector预先分配多大的内存空间。
+
+只有当需要的内存空间超过当前容量时，reserve调用才会改变vector的容量。如果需求大小大于当前容量，reserve至少分配与需求一样大的内存空间（可能更大）
+
+如果需求大小小于或者等于当前容量，reserve什么也不做。特别是，当需求大小小于当前容量时，容器不会退回内存空间。因此，在调用reserve之后，capacity将会大于或等于传递给reserve的参数。
+
+调用reserve永远也不会减少容器占用的内存空间。类似的，resize成员函数只改变容器中元素的数目，而不是容器的容量。我们同样不能使用resize来减少容器预留的内存空间。
+
+在新标准库中，我们可以调用shrink_to_fit来要求deque、vector、string退回不需要的内存空间。此函数指出我们不再需要任何多余的内存空间。但是，具体的实现可以选择忽略此请求。也就是说，调用shrink_to_fit也并不保证一定退回内存空间。
+
+#### capacity和size
+
+理解capacity和size的区别非常重要。容器的size是指他已经保存的元素的数量：而capacity则是在不分配新的内存空间的前提下它最多可以保存多少元素。
+
+实际上，只要没有操作需求超出vector的容量，vector就不能重新分配内存空间。
+
+> Note! 每个vector实现都可以选择自己的内存分配策略。但是必须遵守的一条原则是：只有当迫不得已时才可以分配新的内存空间。
+
+## 9.5 额外的string操作
+
+### 9.5.1 构造string的其他方法
+
+![](https://cdn.pkubailu.cn/img/9.11.png)
+
+这些构造函数接受一个string或一个const char*参数，还接受（可选的）指定拷贝多少个字符的参数。当我们传递给他们的是一个string时，还可以给定一个下标来指出从哪里开始拷贝。
+
+![](https://cdn.pkubailu.cn/img/9.11-1.png)
+
+通常当我们从一个const char*创建string时，指针指向的数据必须以空字符结尾，拷贝操作遇到空字符时停止。如果我们还传递给构造函数一个计数值，数组就不必以空字符结尾。如果我们未传递计数值且数组也未必以空字符结尾，或者给定计数值大于数组大小，则构造函数的行为是未定义的。
+
+#### substr操作
+
+![](https://cdn.pkubailu.cn/img/9.12.png)
+
+### 9.5.2 改变string的其他方法
+
+除了接受迭代器的insert和erase版本外，string还提供了接受下标的版本。下标指出了开始删除的位置，或是insert到给定值之前的位置：
+
+```C++
+s.insert(s.size(), 5, '!'); // 在s末尾插入5个感叹号
+s.erase(s.size() - 5, 5); // 从s删除最后5个字符
+```
+
+标准库string类型还提供了接受C风格字符数组的insert和assign版本。例如，我们可以将以空字符结尾的字符数组insert到或assign给一个string：
+
+```C++
+const char *cp = "Stately, plump Buck";
+s.assign(cp, 7); // s == "Stately"
+s.insert(s.size(), cp + 7); // s == "Stately, plump Buck"
+```
+
+我们也可以指定将来自其他string或子字符串的字符插入到当前string中或赋予当前string：
+
+```C++
+string s = "Some string", s2 = "Some other string";
+s.insert(0, s2); // 在s中位置0之前插入s2的拷贝
+// 在s[0]之前插入s2中s2[0]开始的s2.size()个字符
+s.insert(0, s2, 0, s2.size());
+```
+
+#### append 和 replace 函数
+
+![](https://cdn.pkubailu.cn/img/9.13-0.png)
+
+![](https://cdn.pkubailu.cn/img/9.13-1.png)
+
+![](https://cdn.pkubailu.cn/img/9.13-2.png)
+
+#### 改变string的多种重载函数
+
+assign和append函数无需指定要替换string中哪个部分：assign总是替换string中的所有内容，append总是将新字符追加到string末尾。
+
+### 9.5.3 string搜索操作
+
+这些搜索成员函数及其参数。每个搜索操作都返回一个string::size_type值，表示匹配发生位置的下标。如果搜索失败，则返回一个名为string::npos的static成员。标准库将npos定义为一个const string::size_type类型，并初始化为值-1。
+
+![](https://cdn.pkubailu.cn/img/9.14-0.png)
+
+![](https://cdn.pkubailu.cn/img/9.14-1.png)
+
+![](https://cdn.pkubailu.cn/img/9.14-2.png)
+
+#### 9.5.4 compare函数
+
+![](https://cdn.pkubailu.cn/img/9.15.png)
+
+### 9.5.5 数值转换
+
+![](https://cdn.pkubailu.cn/img/9.16.png)
+
+## 9.6 容器适配器
+
+除了顺序容器外，标准库还定义了三个顺序容器适配器：stack、queue、priorty_queue。本质上，一个适配器是一种机制，能使某种事物的行为看起来像另外一种事物一样。一个容器适配器接受一种已有的容器类型，使其行为看起来像一种不同的类型。
+
+![](https://cdn.pkubailu.cn/img/9.17.png)
+
+#### 定义一个适配器
+
+每个适配器都定义两个构造函数：默认构造函数创建一个空对象，接受一个容器的构造函数拷贝该容器来初始化适配器。
+
+```C++
+stack<int> stk(deq); // 从deq拷贝元素到stk
+```
+
+默认情况下，stack和queue是基于deque实现的，priority_queue是在vector之上实现的。我们可以在创建一个适配器时将一个命名的顺序容器作为第二个类型参数，来重载默认容器类型。
+
+```C++
+// 在vector上实现的空栈
+stack<string, vector<string>> str_stk;
+// str_stk2 在
+stack<string, vector<string>> str_stk2(svec);
+```
+
+对于一个给定的适配器，可以使用哪些容器是有限制的。所有的适配器都要求容器具有添加和删除元素的能力。因此，适配器不能构造在array之上。类似的，我们也不能用forward_list来构造适配器，因为所有的适配器都要求容器具有添加、删除以及访问尾元素的能力。
+
+#### 栈适配器
+
+![](https://cdn.pkubailu.cn/img/9.18.png)
+
+每个容器适配器都基于底层容器类型的操作定义了自己的特殊操作。我们只可以使用适配器操作，而不能使用底层容器类型的操作。
+
+#### 队列适配器
+
+![](https://cdn.pkubailu.cn/img/9.19-1.png)
+
+![](https://cdn.pkubailu.cn/img/9.19-2.png)
