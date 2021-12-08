@@ -3621,3 +3621,19 @@ stack<string, vector<string>> str_stk2(svec);
 
 ### 10.2.1 只读算法
 
+```C++
+// 对vec中的元素求和，和的初值是0
+int sum = accumulate(vec.cbegin(), vec.cend());
+```
+
+accumulate将第三个参数作为求和的起点，这蕴含着一个编程假定：将元素类型加到和的类型上的操作必须是可行的。即，序列中元素的类型必须与第三个参数匹配，或者能够转换为第三个参数的类型。
+
+> Note! accumulate的第三个参数的类型决定了函数中使用哪个加法运算符以及返回值的类型。
+
+```C++
+// 由于string定义了+运算符，所以我们可以通过调用accumulate来将vector中所有string元素连接起来
+string sum = accumulate(v.cbegin(), v.cend(), string(""));
+// 错误：const char* 上没有定义+运算符
+string sum = accumulate(v.cbegin(), v.cend(), "");
+```
+
