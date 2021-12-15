@@ -3088,7 +3088,7 @@ vector<noDefault> v2(10); // 错误： 必须提供一个元素初始化器
 
 forward_list 迭代器不支持递减运算符。
 
-算术运算只能引用于string、vector、deque、array的迭代器。我们不能将它们用于其他任何容器类型的迭代器。
+算术运算只能应用于string、vector、deque、array的迭代器。我们不能将它们用于其他任何容器类型的迭代器。
 
 一个**迭代器范围**由一对迭代器表示，两个迭代器分别指向同一个容器中的元素或者是尾元素之后的位置。这两个迭代器通常被称为begin和end，他们标记了容器中元素的一个范围。
 
@@ -3159,7 +3159,7 @@ auto it8 = a.cbegin(); // it8是const_iterator
 list<string> authors = {"Milton", "Shakespeare", "Austen"};
 vector<const char*> articles = {"a", "an", "the"};
 list<string> list2(authors); // 正确：类型匹配
-deque<string> authList(authors); // 错误：容器类型匹配
+deque<string> authList(authors); // 错误：容器类型不匹配
 vector<string> words(articles); // 错误：容器元素类型不匹配
 // 正确： 可以将const char*元素转换为string
 forward_list<string> words(articles.begin(), articles.end());
@@ -3260,7 +3260,7 @@ names.assign(oldstyle.cbegin(), oldstyle.cend());
 
 #### 使用swap
 
-swap操作交换两个相同类型容器得内容。
+swap操作交换两个相同类型容器的内容。
 
 ```C++
 vector<string> svec1(10); // 10个元素的vector
@@ -5579,4 +5579,78 @@ new 表达式分配并初始化了n个string。但是，我们可能不需要n�
 更重要的是，那些没有默认构造函数的类就不能动态分配数组了。
 
 #### allocator 类
+
+标准库allocator类帮助我们将内存和对象构造分离开来。它提供一种类型感知的内存分配方法，他分配的内存是原始的、未构造的。
+
+类似vector，allocator是一个模板。为了定义一个allocator对象，我们必须指明这个allocator可以分配的对象类型。当一个allocator对象分配内存时，它会根据给定的对象类型来确定恰当地内存大小和对齐位置：
+
+```C++
+allocator<string> alloc; // 可以分配string的allocator对象
+auto const p = alloc.allocate(n); // 分配n个未初始化的string
+```
+
+![](https://cdn.pkubailu.cn/img/12.7.png)
+
+#### allocator 分配未构造的内存
+
+allocator分配的内存是未构造的。我们按需要在此内存中构造对象。在新标准库中，construct成员函数接受一个指针和零个或多个额外参数，在给定位置构造一个元素。额外参数用来初始化构造的对象。类似make_shared的参数，这些额外参数必须是与构造的对象的类型相匹配的合法的初始化器：
+
+```C++
+auto q = p; // q指向最后构造的元素之后的位置
+alloc.construct(q++); // *q为空字符串
+alloc.construct(q++, 10, 'c'); // *q为cccccccccc
+alloc.construct(q++, "hi"); // *q为hi
+```
+
+在早期版本的标准库中，construct只接受两个参数：指向创建对象位置的指针和一个元素类型的值。因此，我们只能将一个元素拷贝到未构造空间中，而不能用元素类型的任何其他构造函数来构造一个元素。
+
+```C++
+// 还未构造对象的情况下就使用原始内存是错误的
+cout << *p << endl; // 正确：使用string的输出运算符
+cout << *q << endl; // 灾难： q指向未构造的内存
+```
+
+> Warning! 为了使用allocator返回的内存，我们必须用construct构造对象。使用未构造的内存，其行为是未定义的。
+
+当我们用完对象后，必须对每个构造的元素调用destory来销毁它们。函数destory接受一个指针，对指向的对象执行析构函数：
+
+```C++
+while(q != p)
+  alloc.destroy(--q); // 释放我们真正构造的string
+```
+
+在循环开始出，q指向最后构造的元素之后的位置。我们在调用destroy之前对q进行了递减操作。因此，第一次调用destroy时，q指向最后一个构造的元素。最后一步循环中我们destroy了第一个构造的元素，随后q将与p相等，循环结束。
+
+> Warning! 我们只能对真正构造了的元素进行destroy操作。
+
+一旦元素被销毁后，就可以重新使用这部分内存来保存其他string，也可以将其归还给系统。释放内存通过调用deallocate来完成：
+
+```C++
+alloc.deallocate(p, n);
+```
+
+我们传递给deallocate的指针不能为空，它必须指向由allocate分配的内存。而且，传递给deallocate的大小参数必须与调用allocated分配内存时提供的大小参数具有一样的值。
+
+#### 拷贝和填充未初始化内存的算法
+
+标准库还为allocator类定义了两个伴随算法，可以在未初始化内存中创建对象。
+
+![](https://cdn.pkubailu.cn/img/12.8.png)
+
+作为一个例子，假定有一个int的vector，希望将其内容拷贝到动态内存中。我们将分配一块比vector中元素所占用空间大一倍的动态内存，然后将原vector中的元素拷贝到前一半空间，对后一半空间用一个给定值进行填充：
+
+```C++
+// 分配比vi中元素所占用空间大一倍的动态内存
+auto p = alloc.allocate(vi.seze() * 2);
+// 通过拷贝vi中的元素来构造从p开始的元素
+auto q = uninitialized_copy(vi.begin(), vi.end(), p);
+// 将剩余元素初始化为42
+uninitialized_fill_n(q, vi.size(), 42);
+```
+
+类似拷贝算法，uninitialized_copy接受三个迭代器参数。前两个表示输入序列，第三个表示这些元素将要拷贝到的目的空间。传递给uninitialized_copy的目的位置迭代器必须指向未构造的内存。与copy不同，uninitialized_copy在给定目的位置构造元素。
+
+类似copy，uninitialized_copy返回（递增后的）目的位置迭代器。因此，一次uninitialized_copy调用会返回一个指针，指向最后一个构造的元素之后的位置。在本例中，我们将此指针保存在q中，然后将q传递给uninitialized_fill_n。此函数类似fill_n，接受一个指向目的位置的指针、一个记数和一个值。他会在目的位置指针指向的内存中创建给定数目个对象，用给定值对他们进行初始化。
+
+## 12.3 使用标准库：文本查询程序
 
