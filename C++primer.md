@@ -1915,7 +1915,7 @@ private:
 
 ### 7.2.1 友元
 
-既然Sales_data的数据成员是private的，我们的read、print和add函数也就无法正常编译了，这是因为尽管这几个函数是累的接口的一部分，但他们不是类的成员。
+既然Sales_data的数据成员是private的，我们的read、print和add函数也就无法正常编译了，这是因为尽管这几个函数是类的接口的一部分，但他们不是类的成员。
 
 类可以允许其他类或者函数访问它的非公有成员，方法是令其他类或者函数成为它的**友元**。如果类想把一个函数成为它的友元，只需要增加一条friend关键字开始的函数声明语句即可：
 
@@ -3137,7 +3137,7 @@ begin和end操作生成指向容器中第一个元素和尾元素之后位置的
 list<string>::iterator it5 = a.begin();
 list<string>::const_iterator it6 = a.cbegin();
 // 是iterator还是const_iterator依赖于a的类型
-auto it7 = a.begin(); // 仅当a时const时，it7是const_iterator
+auto it7 = a.begin(); // 仅当a是const时，it7是const_iterator
 auto it8 = a.cbegin(); // it8是const_iterator
 ```
 
