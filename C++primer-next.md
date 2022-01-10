@@ -1252,10 +1252,13 @@ double Basket::total_receipt(ostream &os) const
 						iter = items.upper_bound(*iter)){
 	//我们知道在当前的 Basket中至少有一个该关键字的元素
   // 打印该书籍对应的项目
-	sum += print_total(os,*iter,items.count(*iter));
+		sum += print_total(os,*iter,items.count(*iter));
   }
 	os << "Total Sale∶ " << sum << endl;// 打印最终的总价格
   return Sum;
 }
 ```
 
+我们的 for循环首先定义并初始化iter，令其指向 multiset 的第一个元素。条件部分检查iter 是否等于items.cend（）∶如果相等，表明我们已经处理完了所有购买记录，接下来应该跳出 for循环;否则，如果不相等，则继续处理下一本书籍。
+
+比较有趣的是，for 循环中的"递增"表达式。与通常的循环语句依次读取每个元素不同，我们直接令iter指向下一个关键字，调用 upper bound函数可以令我们跳过与当前关键字相同的所有元素（参见11.3.5节，第 390页）。对于upper bound 函数来说，它返回的是一个迭代器，该迭代器指向所有与 iter 关键字相等的元素中最后一个元素的
