@@ -1252,13 +1252,103 @@ double Basket::total_receipt(ostream &os) const
 						iter = items.upper_bound(*iter)){
 	//我们知道在当前的 Basket中至少有一个该关键字的元素
   // 打印该书籍对应的项目
-		sum += print_total(os,*iter,items.count(*iter));
+		sum += print_total(os,**iter,items.count(*iter));
   }
 	os << "Total Sale∶ " << sum << endl;// 打印最终的总价格
   return Sum;
 }
 ```
 
-我们的 for循环首先定义并初始化iter，令其指向 multiset 的第一个元素。条件部分检查iter 是否等于items.cend（）∶如果相等，表明我们已经处理完了所有购买记录，接下来应该跳出 for循环;否则，如果不相等，则继续处理下一本书籍。
+我们的 for循环首先定义并初始化 iter，令其指向 multiset 的第一个元素。条件部分检查 iter 是否等于 items.cend()：如果相等，表明我们已经处理完了所有购买记录，接下来应该跳出 for 循环；否则，如果不相等，则继续处理下一本书籍。
 
-比较有趣的是，for 循环中的"递增"表达式。与通常的循环语句依次读取每个元素不同，我们直接令iter指向下一个关键字，调用 upper bound函数可以令我们跳过与当前关键字相同的所有元素（参见11.3.5节，第 390页）。对于upper bound 函数来说，它返回的是一个迭代器，该迭代器指向所有与 iter 关键字相等的元素中最后一个元素的
+比较有趣的是，for 循环中的"递增"表达式。与通常的循环语句依次读取每个元素不同，我们直接令 iter 指向下一个关键字，调用 upper_bound 函数可以令我们跳过与当前关键字相同的所有元素（参见11.3.5节）。对于 upper_bound 函数来说，它返回的是一个迭代器，该迭代器指向所有与 iter 关键字相等的元素中最后一个元素的下一位置。因此，我们得到的迭代器或者指向集合的末尾，或者指向下一本书籍。
+
+在 for 循环内部，我们通过调用 print_total（参见15.1节）来打印购物篮中每本书籍的细节：
+
+```C++
+sum += print_total(os, **iter, items.count(*iter));
+```
+
+print_total 的实参包括一个用于写入数据的 ostream、一个待处理的 Quote 对象和一个计数值。当我们解引用 iter 后将得到一个指向准备打印的对象的 shared_ptr。为了得到这个对象，必须解引用该 shared_ptr。因此，**iter是一个 Quote 对象（或者 Quote 的派生类的对象）。我们使用 multiset 的 count 成员（参见11.3.5节）来统计在 multiset 中有多少元素的键值相同（即 ISBN 相同）。
+
+如我们所知，print_total 调用了虚函数 net_price，因此最终的计算结果依赖于**iter 的动态类型。print_total 函数打印并返回给定书籍的总价格，我们把这个结果添加到 sum 当中，最后当循环结束后打印 sum。
+
+#### 隐藏指针
+
+Basket 的用户仍然必须处理动态内存，原因是 add_item 需要接受一个 shared_ptr 参数。因此，用户不得不按照如下形式编写代码：
+
+```C++
+Basket bsk;
+bsk.add_item(make_shared<Quote>("123",45));
+bsk.add_item(make_shared<Bulk_quote>("345",45,3,.15));
+```
+
+我们的下一步是重新定义 add_item，使得它接受一个 Quote 对象而非 shared_ptr。新版本的 add_item将负责处理内存分配，这样它的用户就不必再受困于此了。我们将定义两个版本，一个拷贝它给定的对象，另一个则采取移动操作（参见13.6.3节）：
+
+```C++
+void add_item(const Quote& sale);  // 拷贝给定的对象
+void add_item(Quote&& sale);  //移动给定的对象
+```
+
+唯一的问题是 add_item 不知道要分配的类型。当 add_item 进行内存分配时，它将拷贝（或移动）它的 sale 参数。在某处可能会有一条如下形式的 new 表达式：
+
+```C++
+new Quote(sale)
+```
+
+不幸的是，这条表达式所做的工作可能是不正确的：new 为我们请求的类型分配内存，因此这条表达式将分配一个 Quote 类型的对象并且拷贝 sale 的 Quote 部分。然而，sale 实际指向的可能是 Bulk_quote 对象，此时，该对象将被迫切掉一部分。
+
+#### 模拟虚拷贝
+
+为了解决上述问题，我们给 Quote 类添加一个虚函数，该函数将申请一份当前对象的拷贝。
+
+```C++
+class Quote {
+public:
+	// 该虚函数返回当前对象的一份动态分配的拷贝
+	// 这些成员使用的引用限定符参见 13.6.3节
+	virtual Quote* clone() const & {return new Quote(*this);}
+  virtual Quote* clone() &&
+	{return new Quote(std::move(*this));}
+	//其他成员与之前的版本一致
+};
+```
+
+```C++
+class Bulk_quote : public Quote {
+	Bulk_quote* clone() const &{return new Bulk_quote(*this);}
+  Bulk_quote* clone() &&
+	{return new Bulk_quote(std::move(*this));}
+// 其他成员与之前的版本一致
+};
+```
+
+因为我们拥有 add_item 的拷贝和移动版本，所以我们分别定义 clone 的左值和右值版本（参见13.6.3节）。每个clone 函数分配当前类型的一个新对象，其中，const 左值引用成员将它自己拷贝给新分配的对象;右值引用成员则将自己移动到新数据中。
+
+我们可以使用 clone 很容易地写出新版本的 add_item：
+
+```C++
+class Basket{
+public:
+	// 拷贝给定的对象
+	void add_item (const Quote& sale)
+	{ items.insert(std::shared_ptr<Quote>(sale.clone()));}
+	// 移动给定的对象
+	void add_item(Quote&& sale)
+	{ items.insert(
+    std::shared_ptr<Quote(std::move(sale).clone())); }
+  // 其他成员与之前的版本一致
+};
+```
+
+和 add_item 本身一样，clone 函数也根据作用于左值还是右值而分为不同的重载版本。在此例中，第一个 add_item 函数调用 clone 的 const 左值版本，第二个函数调用 clone 的右值引用版本。在右值版本中，尽管 sale 的类型是右值引用类型，但实际上 sale 本身（和任何其他变量一样）是个左值（参见13.6.1节）。因此，我们调用 move 把一个右值引用绑定到 sale 上。
+
+我们的 clone 函数也是一个虚函数。sale 的动态类型（通常）决定了到底运行Quote 的函数还是 Bulk_quote 的函数。无论我们是拷贝还是移动数据，clone 都返回一个新分配对象的指针，该对象与 clone 所属的类型一致。我们把一个 shared_ptr 绑定到这个对象上，然后调用 insert 将这个新分配的对象添加到 items 中。注意，因为 shared_ptr 支持派生类向基类的类型转换（参见 15.2.2节），所以我们能把 shared_ptr<Quote> 绑定到 Bulk_quote* 上。
+
+## 15.9 文本查询程序再探
+
+接下来，我们扩展12.3节的文本查询程序，用它作为说明继承的最后一个例子。在上一版的程序中，我们可以查询在文件中某个指定单词的出现情况。我们将在本节扩展该程序使其支持更多更复杂的查询操作。在后面的例子中，我们将针对下面这个小故事展开查询：
+
+````C++
+````
+
