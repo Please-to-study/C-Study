@@ -763,11 +763,7 @@ cout << bulk.isbn();
 名字 isbn 的解析将按照下述过程所示：
 
 - 因为我们是通过 Bulk_quote 的对象调用 isbn 的，所以首先在 Bulk_quote 中查找，这一步没有找到名字 isbn。
-
-- 因为 Bulk_quote 是 Disc_quote 的派生类，所以接下来在 Disc_quote 中查
-
-  找，仍然找不到。
-
+- 因为 Bulk_quote 是 Disc_quote 的派生类，所以接下来在 Disc_quote 中查找，仍然找不到。
 - 因为 Disc_quote 是 Quote 的派生类，所以接着查找 Quote；此时找到了名字 isbn，所以我们使用的 isbn 最终被解析为 Quote 中的 isbn。
 
 #### 在编译时进行名字查找
@@ -790,7 +786,7 @@ Bulk_quote bulk;
 Bulk_quote *bulkP = &bulk; // 静态类型与动态类型一致
 Quote *itemP = &bulk;  // 静态类型与动态类型不一致
 bulkP->discount_policy(); // 正确：bulkP的类型是 Bulk_quote*
-itemP->discount policy(); // 错误：itemP的类型是 Quote*
+itemP->discount_policy(); // 错误：itemP的类型是 Quote*
 ```
 
 尽管在 bulk 中确实含有一个名为 discount_policy 的成员，但是该成员对于itemP 却是不可见的。itemP的类型是 Quote 的指针，意味着对 discount_policy 的搜索将从 Quote 开始。显然 Quote 不包含名为 discount_policy 的成员，所以我们无法通过 Quote 的对象、引用或指针调用 discount_policy。
@@ -931,7 +927,7 @@ p3->fcn(42);  //静态绑定，调用 D2∶∶fcn（int）
 
 #### 覆盖重载的函数
 
-和其他函数一样，成员函数无论是否是虚函数都能被重载。派生类可以覆盖重载函数的0个或多个实例。如果派生类希望所有的重载版本对干它来说都是可见的，那么它就需要覆盖所有的版本，或者一个也不覆盖。
+和其他函数一样，成员函数无论是否是虚函数都能被重载。派生类可以覆盖重载函数的0个或多个实例。如果派生类希望所有的重载版本对于它来说都是可见的，那么它就需要覆盖所有的版本，或者一个也不覆盖。
 
 有时一个类仅需覆盖重载集合中的一些而非全部函数，此时，如果我们不得不覆盖基类中的每一个版本的话，显然操作将极其烦琐。
 
@@ -1345,10 +1341,567 @@ public:
 
 我们的 clone 函数也是一个虚函数。sale 的动态类型（通常）决定了到底运行Quote 的函数还是 Bulk_quote 的函数。无论我们是拷贝还是移动数据，clone 都返回一个新分配对象的指针，该对象与 clone 所属的类型一致。我们把一个 shared_ptr 绑定到这个对象上，然后调用 insert 将这个新分配的对象添加到 items 中。注意，因为 shared_ptr 支持派生类向基类的类型转换（参见 15.2.2节），所以我们能把 shared_ptr<Quote> 绑定到 Bulk_quote* 上。
 
-## 15.9 文本查询程序再探
+# 第 16 章 模板与泛型编程
 
-接下来，我们扩展12.3节的文本查询程序，用它作为说明继承的最后一个例子。在上一版的程序中，我们可以查询在文件中某个指定单词的出现情况。我们将在本节扩展该程序使其支持更多更复杂的查询操作。在后面的例子中，我们将针对下面这个小故事展开查询：
+面向对象编程（OOP）和泛型编程都能处理在编写程序时不知道类型的情况。不同之处在于：OOP能处理类型在程序运行之前都未知的情况；而在泛型编程中，在编译时就能获知类型了。
 
-````C++
-````
+本书第ⅡI部分中介绍的容器、迭代器和算法都是泛型编程的例子。当我们编写一个泛型程序时，是独立于任何特定类型来编写代码的。当使用一个泛型程序时，我们提供类型或值，程序实例可在其上运行。
 
+例如，标准库为每个容器提供了单一的、泛型的定义，如 vector。我们可以使用这个泛型定义来定义很多类型的 vector，它们的差异就在于包含的元素类型不同。
+
+模板是C++中泛型编程的基础。一个模板就是一个创建类或函数的蓝图或者说公式。当使用一个vector这样的泛型类型，或者 find 这样的泛型函数时，我们提供足够的信息，将蓝图转换为特定的类或函数。这种转换发生在编译时。
+
+## 16.1 定义模板
+
+假定我们希望编写一个函数来比较两个值，并指出第一个值是小于、等于还是大于第二个值。在实际中，我们可能想要定义多个函数，每个函数比较一种给定类型的值。我们的初次尝试可能定义多个重载函数。
+
+如果对每种希望比较的类型都不得不重复定义完全一样的函数体，是非常烦琐且容易出错的。更麻烦的是，在编写程序的时候，我们就要确定可能要 compare 的所有类型。如果希望能在用户提供的类型上使用此函数，这种策略就失效了。
+
+### 16.1.1 函数模板
+
+我们可以定义一个通用的函数模板（function template），而不是为每个类型都定义一个新函数。一个函数模板就是一个公式，可用来生成针对特定类型的函数版本。compare 的模板版本可能像下面这样：
+
+```C++
+template <typename T>
+int compare(const T &v1, const T &v2)
+{
+  if(v1 < v2) return-1;
+  if(v2 < v1) return 1;
+  return 0;
+}
+```
+
+模板定义以关键字 template 开始，后跟一个模板参数列表，这是一个逗号分隔的一个或多个模板参数的列表，用小于号（<）和大于号（>）包围起来。
+
+> Note! 在模板定义中，模板参数列表不能为空。
+
+模板参数列表的作用很像函数参数列表。函数参数列表定义了若干特定类型的局部变量，但并未指出如何初始化它们。在运行时，调用者提供实参来初始化形参。
+
+类似的，模板参数表示在类或函数定义中用到的类型或值。当使用模板时，我们（隐式地或显式地）指定模板实参，将其绑定到模板参数上。
+
+我们的 compare 函数声明了一个名为 T 的类型参数。在 compare 中，我们用名字 T 表示一个类型。而 T 表示的实际类型则在编译时根据 compare 的使用情况来确定。
+
+#### 实例化函数模板
+
+当我们调用一个函数模板时，编译器（通常）用函数实参来为我们推断模板实参。即，当我们调用 compare 时，编译器使用实参的类型来确定绑定到模板参数 T 的类型。例如，在下面的调用中：
+
+```C++
+cout << compare(1, 0) << endl; // T为int
+```
+
+实参类型是 int。编译器会推断出模板实参为 int，并将它绑定到模板参数 T。
+
+编译器用推断出的模板参数来为我们实例化一个特定版本的函数。当编译器实例化一个模板时，它使用实际的模板实参代替对应的模板参数来创建出模板的一个新"实例"。例如，给定下面的调用：
+
+```C++
+// 实例化出 int compare(const int&，const int&)
+cout << compare (1, 0) << endl; // T为int
+// 实例化出 int compare(const vector<int>&，const vector<int>&)
+vector<int> vecl{1,2,3}, vec2{4,5,6};
+cout << compare(vecl, vec2) << endl; // T为 vector<int>
+```
+
+编译器会实例化出两个不同版本的 compare。对于第一个调用，编译器会编写并编译一个 compare 版本，其中 T 被替换为 int：
+
+```C++
+int compare(const int &vl, const int &v2)
+{
+  if (v1 < v2) return -1;
+  if (v2 < vl) return 1;
+  return 0;
+}
+```
+
+对于第二个调用，编译器会生成另一个 compare 版本，其中 T 被替换为 vector<int>。这些编译器生成的版本通常被称为模板的实例。
+
+#### 模板类型参数
+
+我们的 compare 函数有一个模板类型参数。一般来说，我们可以将类型参数看作类型说明符，就像内置类型或类类型说明符一样使用。特别是，**类型参数可以用来指定返回类型或函数的参数类型，以及在函数体内用于变量声明或类型转换**：
+
+```C++
+// 正确∶返回类型和参数类型相同
+template <typename T> T foo (T* p)
+{
+	T tmp = *p; // tmp 的类型将是指针p指向的类型
+  //... 
+  return tmp;
+}
+```
+
+类型参数前必须使用关键字 class 或 typename：
+
+```C++
+// 错误∶U之前必须加上 class 或 typename
+template <typename T, U> T calc(const T&,const U&);
+```
+
+在模板参数列表中，这两个关键字的含义相同，可以互换使用。一个模板参数列表中可以同时使用这两个关键字：
+
+```C++
+// 正确∶在模板参数列表中，typename 和class 没有什么不同
+template <typename T, class U> calc (const T&,const U&);
+```
+
+看起来用关键字 typename 来指定模板类型参数比用 class 更为直观。毕竟，我们可以用内置（非类）类型作为模板类型实参。而且，typename 更清楚地指出随后的名字是一个类型名。但是，typename 是在模板已经广泛使用之后才引入C++ 语言的，某些程序员仍然只用 class。
+
+#### 非类型模板参数
+
+除了定义类型参数，还可以在模板中定义非类型参数。一个非类型参数表示一个值而非一个类型。我们通过一个特定的类型名而非关键字 class 或 typename 来指定非类型参数。
+
+当一个模板被实例化时，非类型参数被一个用户提供的或编译器推断出的值所代替。这些值必须是常量表达式（参见 2.4.4 节），从而允许编译器在编译时实例化模板。
+
+例如，我们可以编写一个 compare 版本处理字符串字面常量。这种字面常量是 const char 的数组。由于不能拷贝一个数组，所以我们将自己的参数定义为数组的引用（参见6.2.4节）。由于我们希望能比较不同长度的字符串字面常量，因此为模板定义了两个非类型的参数。第一个模板参数表示第一个数组的长度，第二个参数表示第二个数组的长度：
+
+```C++
+template<unsigned N, unsigned M>
+int compare(const char(&pl)[N], const char(&p2)[M])
+{
+  return strcmp(p1, p2);
+}
+```
+
+当我们调用这个版本的 compare 时：
+
+```C++
+compare("hi","mom");
+```
+
+编译器会使用字面常量的大小来代替 N 和 M，从而实例化模板。记住，编译器会在一个字符串字面常量的末尾插入一个空字符作为终结符（参见 2.1.3 节），因此编译器会实例化出如下版本：
+
+```C++
+int compare (const char (&pl)[3], const char(&p2)[4]);
+```
+
+一个非类型参数可以是一个整型，或者是一个指向对象或函数类型的指针或（左值）引用。绑定到非类型整型参数的实参必须是一个常量表达式。绑定到指针或引用非类型参数的实参必须具有静态的生存期（参见第 12 章）。我们不能用一个普通（非static）局部变量或动态对象作为指针或引用非类型模板参数的实参。指针参数也可以用 nullptr 或一个值为 0 的常量表达式来实例化。
+
+在模板定义内，模板非类型参数是一个常量值。在需要常量表达式的地方，可以使用非类型参数，例如，指定数组大小。
+
+> Note! 非类型模板参数的模板实参必须是常量表达式。
+
+#### inline 和 constexpr 的函数模板
+
+函数模板可以声明为 inline 或 constexpr 的，如同非模板函数一样。inline 或constexpr 说明符放在模板参数列表之后，返回类型之前：
+
+```C++
+// 正确∶inline说明符跟在模板参数列表之后
+template <typename T> inline T min(const T&, const T&); 
+// 错误∶ inline说明符的位置不正确
+inline template <typename T> T min(const T&, const T&);
+```
+
+#### 编写类型无关的代码
+
+我们最初的 compare 函数虽然简单，但它说明了编写泛型代码的两个重要原则：
+
+-  模板中的函数参数是 const 的引用。
+- 函数体中的条件判断仅使用 < 比较运算。
+
+通过将函数参数设定为 const 的引用，我们保证了函数可以用于不能拷贝的类型。大多数类型，包括内置类型和我们已经用过的标准库类型（除 unigue_ptr 和 IO 类型之外），都是允许拷贝的。但是，不允许拷贝的类类型也是存在的。通过将参数设定为 const 的引用，保证了这些类型可以用我们的 compare 函数来处理。而且，如果 compare 用于处理大对象，这种设计策略还能使函数运行得更快。
+
+你可能认为既使用 < 运算符又使用 > 运算符来进行比较操作会更为自然：
+
+```C++
+// 期望的比较操作
+if (v1 < v2) return -1;
+if (v1 > v2) return 1;
+return 0;
+```
+
+但是，如果编写代码时只使用 < 运算符，我们就降低了 compare 函数对要处理的类型的要求。这些类型必须支持 <，但不必同时支持 >。
+
+实际上，如果我们真的关心类型无关和可移植性，可能需要用 less（参见14.8.2 节）来定义我们的函数：
+
+```C++
+// 即使用于指针也正确的 compare 版本; 参见14.8.2节
+template <typename T> int compare(const T &vl, const T &v2)
+{
+  if(less<T>()(vl,v2)) return -1;
+  if(less<T>()(v2,vl)) return 1;
+  return 0;
+}
+```
+
+原始版本存在的问题是，如果用户调用它比较两个指针，且两个指针未指向相同的数组，则代码的行为是未定义的（据查阅资料，less<T> 的默认实现用的就是<，所以这其实并未起到让这种比较有一个良好定义的作用——译者注）。
+
+> Note! 模板程序应该尽量减少对实参类型的要求。
+
+#### 模板编译
+
+当编译器遇到一个模板定义时，它并不生成代码。只有当我们实例化出模板的一个特定版本时，编译器才会生成代码。当我们使用（而不是定义）模板时，编译器才生成代码，这一特性影响了我们如何组织代码以及错误何时被检测到。
+
+通常，当我们调用一个函数时，编译器只需要掌握函数的声明。类似的，当我们使用一个类类型的对象时，类定义必须是可用的，但成员函数的定义不必已经出现。因此，我们将类定义和函数声明放在头文件中，而普通函数和类的成员函数的定义放在源文件中。
+
+模板则不同：为了生成一个实例化版本，编译器需要掌握函数模板或类模板成员函数的定义。因此，与非模板代码不同，模板的头文件通常既包括声明也包括定义。
+
+> Note! 函数模板和类模板成员函数的定义通常放在头文件中。
+
+> **关键概念：模板和头文件**
+>
+> 模板包含两种名字：
+>
+> - 那些不依赖于模板参数的名字
+> - 那些依赖于模板参数的名字
+>
+> 当使用模板时，所有不依赖于模板参数的名字都必须是可见的，这是由模板的提供者来保证的。而且，模板的提供者必须保证，当模板被实例化时，模板的定义，包括类模板的成员的定义，也必须是可见的。
+>
+> 用来实例化模板的所有函数、类型以及与类型关联的运算符的声明都必须是可见的，这是由模板的用户来保证的。
+>
+> 通过组织良好的程序结构，恰当使用头文件，这些要求都很容易满足。模板的设计者应该提供一个头文件，包含模板定义以及在类模板或成员定义中用到的所有名字的声明。模板的用户必须包含模板的头文件，以及用来实例化模板的任何类型的头文件。
+
+### 大多数编译错误在实例化期间报告
+
+模板直到实例化时才会生成代码，这一特性影响了我们何时才会获知模板内代码的编译错误。通常，编译器会在三个阶段报告错误。
+
+第一个阶段是编译模板本身时。在这个阶段，编译器通常不会发现很多错误。编译器可以检查语法错误，例如忘记分号或者变量名拼错等，但也就这么多了。
+
+第二个阶段是编译器遇到模板使用时。在此阶段，编译器仍然没有很多可检查的。对于函数模板调用，编译器通常会检查实参数目是否正确。它还能检查参数类型是否匹配。对于类模板，编译器可以检查用户是否提供了正确数目的模板实参，但也仅限于此了。
+
+第三个阶段是模板实例化时，只有这个阶段才能发现类型相关的错误。依赖于编译器如何管理实例化，这类错误可能在链接时才报告。
+
+当我们编写模板时，代码不能是针对特定类型的，但模板代码通常对其所使用的类型有一些假设。例如，我们最初的 compare 函数中的代码就假定实参类型定义了 < 运算符。
+
+```C++
+if (vl < v2) return -1; // 要求类型T的对象支持<操作
+if (v2 < vl) return 1; // 要求类型T的对象支持<操作
+return 0; // 返回 int；不依赖于 T
+```
+
+当编译器处理此模板时，它不能验证 if 语句中的条件是否合法。如果传递给 compare 的实参定义了 < 运算符，则代码就是正确的，否则就是错误的。例如，
+
+```C++
+Sales_data datal, data2;
+cout << compare(datal, data2) << endl;// 错误∶ Sales_data未定义<
+```
+
+此调用实例化了 compare 的一个版本，将 T 替换为 Sales data。if 条件试图对Sales_data 对象使用 < 运算符，但 Sales_data 并未定义此运算符。此实例化生成了一个无法编译通过的函数版本。但是，这样的错误直至编译器在类型 Sales_data 上实例化 compare 时才会被发现。
+
+> WARNING! 保证传递给模板的实参支持模板所要求的操作，以及这些操作在模板中能正确工作，是调用者的责任。
+
+### 16.1.2 类模板
+
+类模板是用来生成类的蓝图的。与函数模板的不同之处是，编译器不能为类模板推断模板参数类型。如我们已经多次看到的，为了使用类模板，我们必须在
+
+模板名后的尖括号中提供额外信息（参见3.3节）——用来代替模板参数的模板实参列表。
+
+#### 定义类模板
+
+作为一个例子，我们将实现 StrBlob（参见 12.1.1节）的模板版本。我们将此模板命名为 Blob，意指它不再针对 string。类似 StrBlob，我们的模板会提供对元素的共享（且核查过的）访问能力。与类不同，我们的模板可以用于更多类型的元素。与标准库容器相同，当使用 Blob 时，用户需要指出元素类型。
+
+类似函数模板，类模板以关键字 template 开始，后跟模板参数列表。在类模板（及其成员）的定义中，我们将模板参数当作替身，代替使用模板时用户需要提供的类型或值：
+
+```C++
+template <typename T> class Blob {
+public:
+	typedef T value_type;
+	typedef typename std::vector<T>::size_type size_type;
+  // 构造函数Blob();
+	Blob(std::initializer_list<T> il);
+  // Blob中的元素数目
+	size_type size() const { return data->size();}
+  bool empty() const { return data->empty();}
+  // 添加和删除元素
+	void push_back (const T &t){data->push_back(t);}
+  //移动版本，参见13.6.3节
+	void push_back(T &&t){ data->push_back(std::move(t));}
+  void pop_back();
+  //元素访问
+  T& back();
+	T& operator[](size_type i); // 在14.5节中定义
+private:
+	std::shared_ptr<std::vector<T>> data;
+  // 若 data[i] 无效，则抛出msg
+	void check(size_type i, const std::string &msg) const;
+};
+```
+
+我们的 Blob 模板有一个名为 T 的模板类型参数，用来表示 Blob 保存的元素的类型。例如，我们将元素访问操作的返回类型定义为 T&。当用户实例化 Blob 时， T 就会被替换为特定的模板实参类型。
+
+除了模板参数列表和使用 T 代替 string 之外，此类模板的定义与12.1.1节中定义的类版本及12.1.6节和第13章、第14章中更新的版本是一样的。
+
+#### 实例化类模板
+
+我们已经多次见到，当使用一个类模板时，我们必须提供额外信息。我们现在知道这些额外信息是显式模板实参列表，它们被绑定到模板参数。编译器使用这些模板实参来实例化出特定的类。
+
+例如，为了用我们的 Blob 模板定义一个类型，必须提供元素类型：
+
+```C++
+Blob<int> ia;   // 空Blob<int>
+Blob<int> ia2 = {0，1，2，3，4};  // 有5个元素的Blob<int>
+```
+
+ia 和 ia2 使用相同的特定类型版本的 Blob（即 Blob<int>）。从这两个定义，编译器会实例化出一个与下面定义等价的类：
+
+```C++
+template<> class Blob<int>{
+	typedef typename std::vector<int>::size_type size_type;
+  Blob();
+	Blob(std::initializer_list<int> il);
+  //...
+	int& operator[](size_type i);
+private:
+	std::shared_ptr<std::vector<int>> data;
+	void check(size_type i,const std::string &msg) const;
+};
+```
+
+当编译器从我们的 Blob 模板实例化出一个类时，它会重写 Blob 模板，将模板参数 T 的每个实例替换为给定的模板实参，在本例中是 int。
+
+对我们指定的每一种元素类型，编译器都生成一个不同的类：
+
+```C++
+// 下面的定义实例化出两个不同的 Blob类型
+Blob<string> names; // 保存string 的Blob 
+Blob<double> prices; // 不同的元素类型
+```
+
+这两个定义会实例化出两个不同的类。names 的定义创建了一个 Blob 类，每个  T 都被替换为string。prices 的定义生成了另一个 Blob 类，T 被替换为 double。
+
+> Note! 一个类模板的每个实例都形成一个独立的类。类型 Blob<string> 与任何其他 Blob 类型都没有关联，也不会对任何其他 Blob 类型的成员有特殊访问权限。
+
+#### 在模板作用域中引用模板类型
+
+为了阅读模板类代码，应该记住类模板的名字不是一个类型名（参见 3.3 节）。类模板用来实例化类型，而一个实例化的类型总是包含模板参数的。
+
+可能令人迷惑的是，一个类模板中的代码如果使用了另外一个模板，通常不将一个实际类型（或值）的名字用作其模板实参。相反的，我们通常将模板自己的参数当作被使用模板的实参。例如，我们的 data 成员使用了两个模板，vector 和 shared_ptr。我们知道，无论何时使用模板都必须提供模板实参。在本例中，我们提供的模板实参就是 Blob 的模板参数。因此，data 的定义如下：
+
+```C++
+std::shared_ptr<std::vector<T>> data;
+```
+
+它使用了 Blob 的类型参数来声明 data 是一个 shared_ptr 的实例，此 shared_ptr 指向一个保存类型为 T 的对象的 vector 实例。当我们实例化一个特定类型的 Blob，例如 Blob<string> 时，data会成为：
+
+```C++
+shared_ptr<vector<string>>
+```
+
+如果我们实例化 Blob<int>，则 data 会成为 shared_ptr<vector<int>>，依此类推。
+
+#### 类模板的成员函数
+
+与其他任何类相同，我们既可以在类模板内部，也可以在类模板外部为其定义成员函数，且定义在类模板内的成员函数被隐式声明为内联函数。
+
+类模板的成员函数本身是一个普通函数。但是，类模板的每个实例都有其自己版本的成员函数。因此，类模板的成员函数具有和模板相同的模板参数。因而，定 义在类模板之外的成员函数就必须以关键字 template 开始，后接类模板参数列表。
+
+与往常一样，当我们在类外定义一个成员时，必须说明成员属干哪个类。而且，从一个模板生成的类的名字中必须包含其模板实参。当我们定义一个成员函数时，模板实参与模板形参相同。即，对于 StrBlob 的一个给定的成员函数
+
+```C++
+ret-type StrBlob::member-name(parm-list)
+```
+
+对应的 Blob的成员应该是这样的：
+
+```C++
+template <typename T>
+ret-type Blob<T>::member-name(parm-list)
+```
+
+#### check 和元素访问成员
+
+我们首先定义 check 成员，它检查一个给定的索引：
+
+```C++
+template <typename T>
+void Blob<T>::check(size_type i, const std::string &msg) const
+{
+  if(i >= data->size())
+		throw std::out_of_range(msg);
+}
+```
+
+除了类名中的不同之处以及使用了模板参数列表外，此函数与原 StrBlob 类的check 成员完全一样。
+
+下标运算符和 back 函数用模板参数指出返回类型，其他未变：
+
+```C++
+template <typename T>
+T& Blob<T>::back()
+{
+  check(0,"back on empty Blob");
+  return data->back();
+}
+template <typename T>
+T& Blob<T>::operator[](size_type i)
+{
+	// 如果i 太大，check会抛出异常，阻止访问一个不存在的元素
+  check(i,"subscript out of range");
+  return (*data)[i];
+}
+```
+
+在原 StrBlob 类中，这些运算符返回 string&。而模板版本则返回一个引用，指向用来实例化 Blob 的类型。
+
+pop_back 函数与原 StrBlob 的成员几乎相同：
+
+```C++
+template <typename T> 
+void Blob<T>::pop_back()
+{
+  check(0,"pop_back on empty Blob");
+  data->pop_back();
+}
+```
+
+#### Blob 构造函数
+
+与其他任何定义在类模板外的成员一样，构造函数的定义要以模板参数开始：
+
+```C++
+template <typename T>
+Blob<T>::Blob() : data(std::make_shared<std::vector<T>>()){}
+```
+
+这段代码在作用域 Blob<T> 中定义了名为 Blob 的成员函数。类似 StrBlob 的默认构造函数（参见12.1.1 节），此构造函数分配一个空 vector，并将指向 vector 的指针保存在 data 中。如前所述，我们将类模板自己的类型参数作为vector 的模板实参来分配 vector。
+
+类似的，接受一个 initializer_list 参数的构造函数将其类型参数 T 作为 initializer_list 参数的元素类型：
+
+```C++
+template <typename T>
+Blob<T>::Blob(std::initializer_list<T> il):
+data(std::make_shared<std::vector<T>>(il)){ }
+```
+
+类似默认构造函数，此构造函数分配一个新的 vector。在本例中，我们用参数 il 来初始化此 vector。
+
+为了使用这个构造函数，我们必须传递给它一个 initializer_list，其中的元素必须与 Blob 的元素类型兼容：
+
+```C++
+Blob<string> articles = {"a","an","the"};
+```
+
+这条语句中，构造函数的参数类型为 initializer_list<string>。列表中的每个字符串字面常量隐式地转换为一个 string。
+
+#### 类模板成员函数的实例化
+
+默认情况下，一个类模板的成员函数只有当程序用到它时才进行实例化。例如，下面代码
+
+```C++
+// 实例化Blob<int>和接受 initializer_list<int>的构造函数
+Blob<int> squares = {0,1,2,3,4,5,6,7,8,9};
+// 实例化Blob<int>∶∶size() const
+for (size_t i = 0; i != squares.size(); ++i)
+	squares[i] = i*i; // 实例化Blob<int>∶∶operator[] (size_t)
+```
+
+实例化了 Blob<int> 类和它的三个成员函数：operator[]、size 和接受initializer_list<int> 的构造函数。
+
+如果一个成员函数没有被使用，则它不会被实例化。成员函数只有在被用到时才进行实例化，这一特性使得即使某种类型不能完全符合模板操作的要求（参见 9.2节），我们仍然能用该类型实例化类。
+
+> Note! 默认情况下，对于一个实例化了的类模板，其成员只有在使用时才被实例化。
+
+#### 在类代码内简化模板类名的使用
+
+当我们使用一个类模板类型时必须提供模板实参，但这一规则有一个例外。在类模板自己的作用域中，我们可以直接使用模板名而不提供实参：
+
+```C++
+// 若试图访问一个不存在的元素，BlobPtr抛出一个异常
+template <typename T> class BlobPtr {
+public:
+	BlobPtr(): curr(0){}
+	BlobPtr(Blob<T> &a, size_t sz = 0):
+				wptr(a.data), curr(sz) { }
+	T& operator*() const
+	{ auto p = check(curr, "dereference past end");
+		return (*p)[curr]; //(*p) 为本对象指向的 vector
+  }
+  // 递增和递减
+	BlobPtr& operator++();// 前置运算符
+  BlobPtr& operator--();
+private:
+	// 若检查成功，check 返回一个指向 vector 的 shared_ptr 
+  std::shared_ptr<std::vector<T>>
+	check(std::size_t, const std::string&) const;
+  // 保存一个 weak ptr，表示底层 vector 可能被销毁
+  std::weak_ptr<std::vector<T>> wptr;
+  std∶∶size_t curr;// 数组中的当前位置
+};
+```
+
+细心的读者可能已经注意到，BlobPtr 的前置递增和递减成员返回 BlobPtr&，而不是 BlobPtr<T>&。当我们处于一个类模板的作用域中时，编译器处理模板自身引用时就好像我们已经提供了与模板参数匹配的实参一样。即，就好像我们这样编写代码一样：
+
+```C++
+BlobPtr<T>& operator++();
+BlobPtr<T>& operator--();
+```
+
+#### 在类模板外使用类模板名
+
+当我们在类模板外定义其成员时，必须记住，我们并不在类的作用域中，直到遇到类名才表示进入类的作用域（参见7.4节）：
+
+```C++
+// 后置∶ 递增/递减对象但返回原值
+template <typename T>
+BlobPtr<T> BlobPtr<T>::operator++(int)
+{
+  // 此处无须检查;调用前置递增时会进行检查
+	BlobPtr ret = *this; //保存当前值
+  ++*this;  //推进一个元素;前置++检查递增是否合法
+	return ret; // 返回保存的状态、
+}
+```
+
+由于返回类型位于类的作用域之外，我们必须指出返回类型是一个实例化的 BlobPtr，它所用类型与类实例化所用类型一致。在函数体内，我们已经进入类的作用域，因此在定义 ret 时无须重复模板实参。如果不提供模板实参，则编译器将假定我们使用的类型与成员实例化所用类型一致。因此，ret 的定义与如下代码等价：
+
+```C++
+BlobPtr<T> ret = *this;
+```
+
+> Note! 在一个类模板的作用域内，我们可以直接使用模板名而不必指定模板实参。
+
+#### 类模板和友元
+
+当一个类包含一个友元声明（参见7.2.1节）时，类与友元各自是否是模板是相互无关的。如果一个类模板包含一个非模板友元，则友元被授权可以访问所有模板实例。如果友元自身是模板，类可以授权给所有友元模板实例，也可以只授权给特定实例。
+
+#### 一对一友好关系
+
+类模板与另一个（类或函数）模板间友好关系的最常见的形式是建立对应实例及其友元间的友好关系。例如，我们的 Blob 类应该将 BlobPtr 类和一个模板版本的 Blob 相等运算符定义为友元。
+
+为了引用（类或函数）模板的一个特定实例，我们必须首先声明模板自身。一个模板声明包括模板参数列表：
+
+```C++
+// 前置声明，在 Blob 中声明友元所需要的
+template <typename> class BlobPtr;
+template <typename> class Blob;//运算符==中的参数所需要的
+template <typename T>
+bool operator==(const Blob<T>&,const Blob<T>&);
+template<typename T> class Blob{
+	//每个Blob 实例将访问权限授予用相同类型实例化的 BlobPtr和相等运算符
+  friend class BlobPtr<T>;
+  friend bool operator==<T>(const Blob<T>&,const Blob<T>&);
+//其他成员定义，与12.1.1 相同
+};
+```
+
+我们首先将 Blob、BlobPtr 和 operator== 声明为模板。这些声明是 operator== 函数的参数声明以及 Blob 中的友元声明所需要的。
+
+友元的声明用 Blob 的模板形参作为它们自己的模板实参。因此，友好关系被限定在用相同类型实例化的 Blob 与 BlobPtr 相等运算符之间：
+
+```C++
+Blob<char> ca;// BlobPtr<char>和 operator==<char>都是本对象的友元
+Blob<int> ia; // BlobPtr<int>和 operator==<int>都是本对象的友元
+```
+
+BlobPtr<char> 的成员可以访问 ca（或任何其他 Blob<char> 对象）的非 public 部分，但 ca 对 ia（或任何其他 Blob<int> 对象）或 Blob 的任何其他实例都没有特殊访问权限。
+
+#### 通用和特定的模板友好关系
+
+一个类也可以将另一个模板的每个实例都声明为自己的友元，或者限定特定的实例为友元：
+
+```C++
+// 前置声明，在将模板的一个特定实例声明为友元时要用到
+template <typename T> class Pal;
+class C{ // C是一个普通的非模板类
+	friend class Pal<C>; //用类C实例化的 Pal是C的一个友元
+  // Pal2的所有实例都是C的友元;这种情况无须前置声明
+  template <typename T> friend class Pal2;
+};
+template <typename T> class C2{  // C2本身是一个类模板
+	// C2的每个实例将相同实例化的 Pal声明为友元
+	friend class Pal<T>; // Pal的模板声明必须在作用域之内
+  // Pal2的所有实例都是C2 的每个实例的友元，不需要前置声明
+  template <typename X> friend class Pal2;
+  // Pal3是一个非模板类，它是C2 所有实例的友元
+  friend class Pal3; // 不需要 Pal3的前置声明
+};
+```
+
+为了让所有实例成为友元，友元声明中必须使用与类模板本身不同的模板参数。
