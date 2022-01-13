@@ -1905,3 +1905,509 @@ template <typename T> class C2{  // C2本身是一个类模板
 ```
 
 为了让所有实例成为友元，友元声明中必须使用与类模板本身不同的模板参数。
+
+#### 令模板自己的类型参数成为友元
+
+在新标准中，我们可以将模板类型参数声明为友元：
+
+```C++
+template <typename Type> class Bar {
+friend Type; //将访问权限授予用来实例化 Bar的类型
+	//... 
+};
+```
+
+此处我们将用来实例化 Bar 的类型声明为友元。因此，对于某个类型名 Foo，Foo 将成为 Bar<Foo> 的友元，Sales_data 将成为 Bar<Sales_data> 的友元，依此类推。值得注意的是，虽然友元通常来说应该是一个类或是一个函数，但我们完全可以用一个内置类型来实例化 Bar。这种与内置类型的友好关系是允许的，以便我们能用内置类型来实例化 Bar 这样的类。
+
+#### 模板类型别名
+
+类模板的一个实例定义了一个类类型，与任何其他类类型一样，我们可以定义一个 typedef（参见2.5.1节）来引用实例化的类：
+
+```C++
+typedef Blob<string> StrBlob;
+```
+
+这条 typedef 语句允许我们运行在 12.1.1 节中编写的代码，而使用的却是用 string 实例化的模板版本的 Blob。**由于模板不是一个类型，我们不能定义一个 typedef 引用一个模板**。即，无法定义一个 typedef 引用 Blob<T>。
+
+但是，新标准允许我们为类模板定义一个类型别名：
+
+```C++
+template<typename T> using twin = pair<T, T>;
+twin<string> authors; // authors是一个 pair<string，string>
+```
+
+在这段代码中，我们将 twin 定义为成员类型相同的 pair 的别名。这样，twin 的用户只需指定一次类型。
+
+一个模板类型别名是一族类的别名：
+
+```C++
+twin<int> win_loss;// win loss 是一个 pair<int，int>
+twin<double> area;// area是一个 pair<double，double>
+```
+
+就像使用类模板一样，当我们使用 twin 时，需要指出希望使用哪种特定类型的twin。
+
+当我们定义一个模板类型别名时，可以固定一个或多个模板参数：
+
+```C++
+template <typename T> using partNo = pair<T, unsigned>;
+partNo<string> books;// books是一个pair<string，unsigned>
+partNo<Vehicle> cars;// cars是一个 pair<Vehicle，unsigned>
+partNo<Student> kids;// kids 是一个 pair<Student，unsigned>
+```
+
+这段代码中我们将 partNo 定义为一族类型的别名，这族类型是 second 成员为unsigned 的 pair。partNo 的用户需要指出 pair 的 first 成员的类型，但不能指定 second 成员的类型。
+
+#### 类模板的 static 成员
+
+与任何其他类相同，类模板可以声明 static 成员（参见7.6节）：
+
+```C++
+template <typename T> class Foo {
+public:
+  static std::size_t count() { return ctr;}
+  // 其他接口成员
+private:
+	static std::size_t ctr;
+  // 其他实现成员
+};
+```
+
+在这段代码中，Foo 是一个类模板，它有一个名为 count 的 public static 成员函数和一个名为 ctr 的 private static 数据成员。每个 Foo 的实例都有其自己的static 成员实例。即，对任意给定类型 x，都有一个 Foo<X>::ctr 和一个 Foo<X>::count 成员。所有 Foo<X> 类型的对象共享相同的 ctr 对象和 count 函数。例如，
+
+```C++
+// 实例化 static 成员 Foo<string>∶∶ctr和 Foo<string>∶∶count 
+Foo<string> fs;
+//所有三个对象共享相同的 Foo<int>∶∶ctr和Foo<int>∶∶count 成员
+Foo<int> fi, fi2, fi3;
+```
+
+与任何其他 static 数据成员相同，模板类的每个 static 数据成员必须有且仅有一个定义。但是，类模板的每个实例都有一个独有的 static 对象。因此，与定义模板的成员函数类似，我们将 static 数据成员也定义为模板：
+
+```C++
+template <typename T>
+size_t Foo<T>∶∶ctr = 0;// 定义并初始化 ctr
+```
+
+与类模板的其他任何成员类似，定义的开始部分是模板参数列表，随后是我们定义的成员的类型和名字。与往常一样，成员名包括成员的类名，对于从模板生成的类来说，类名包括模板实参。因此，当使用一个特定的模板实参类型实例化Foo 时，将会为该类类型实例化一个独立的 ctr，并将其初始化为0。
+
+与非模板类的静态成员相同，我们可以通过类类型对象来访问一个类模板的 static 成员，也可以使用作用域运算符直接访问成员。当然，为了通过类来直接访问 static 成员，我们必须引用一个特定的实例：
+
+```C++
+Foo<int> fi;  // 实例化 Foo<int>类和 static 数据成员 ctr
+auto ct = Foo<int>∶∶count(); // 实例化 Foo<int>∶∶count 
+ct = fi.count();  // 使用 Foo<int>∶∶count
+ct = Foo::count();  // 错误∶ 使用哪个模板实例的 count?
+```
+
+类似任何其他成员函数，一个 static 成员函数只有在使用时才会实例化。
+
+### 16.1.3 模板参数
+
+类似函数参数的名字，一个模板参数的名字也没有什么内在含义。我们通常将类型参数命名为 T，但实际上我们可以使用任何名字：
+
+```C++
+template <typename Foo> Foo calc(const Foo& a,const Foo& b)
+{
+  Foo tmp = a; // tmp 的类型与参数和返回类型一样
+  //...
+	return tmp;// 返回类型和参数类型一样
+}
+```
+
+#### 模板参数与作用域
+
+模板参数遵循普通的作用域规则。一个模板参数名的可用范围是在其声明之后，至模板声明或定义结束之前。与任何其他名字一样，模板参数会隐藏外层作用域中声明的相同名字。但是，与大多数其他上下文不同，在模板内不能重用模板参数名：
+
+```C++
+typedef double A;
+template <typename A, typename B> void f(A a, B b)
+{
+  A tmp = a; // tmp 的类型为模板参数A的类型，而非double 
+  double B; // 错误∶重声明模板参数 B ”
+}
+```
+
+正常的名字隐藏规则决定了 A 的 typedef 被类型参数 A 隐藏。因此，tmp 不是一个double，其类型是使用 f 时绑定到类型参数 A 的类型。由于我们不能重用模板参数名，声明名字为 B 的变量是错误的。
+
+由于参数名不能重用，所以一个模板参数名在一个特定模板参数列表中只能出现一次：
+
+```C++
+// 错误∶非法重用模板参数名V
+template <typename V, typename V> //..
+```
+
+#### 模板声明
+
+模板声明必须包含模板参数：
+
+```C++
+// 声明但不定义 compare 和 Blob
+template <typename T> int compare(const T&,const T&);
+template <typename T> class Blob;
+```
+
+与函数参数相同，声明中的模板参数的名字不必与定义中相同：
+
+```C++
+// 3个 calc 都指向相同的函数模板
+template <typename T> T calc（const T&，const T&）; //声明
+template <typename U> U calc（const U&，const U&）; //声明
+//模板的定义
+template <typename Type>
+Type calc(const Type& a, const Type& b) { /* ...*/ )
+```
+
+当然，一个给定模板的每个声明和定义必须有相同数量和种类（即，类型或非类型）的参数。
+
+> Note! 一个特定文件所需要的所有模板的声明通常一起放置在文件开始位置，出现于任何使用这些模板的代码之前，原因我们将在16.3节中解释。
+
+#### 使用类的类型成员
+
+回忆一下，我们用作用域运算符（::）来访问 static 成员和类型成员（参见7.4节和7.6节）。在普通（非模板）代码中，编译器掌握类的定义。因此，它知道通过作用域运算符访问的名字是类型还是 static 成员。例如，如果我们写下
+
+string::size_type，编译器有 string 的定义，从而知道 size_ type 是一个类型。
+
+但对于模板代码就存在困难。例如，假定 T 是一个模板类型参数，当编译器遇到类似 T::mem 这样的代码时，它不会知道 mem 是一个类型成员还是一个 static数据成员，直至实例化时才会知道。但是，为了处理模板，编译器必须知道名字是否表示一个类型。例如，假定 T 是一个类型参数的名字，当编译器遇到如下形式的语句时：
+
+```C++
+T::size_type *p;
+```
+
+它需要知道我们是正在定义一个名为 p 的变量还是将一个名为 size_type 的 static 数据成员与名为 p 的变量相乘。
+
+默认情况下，C++ 语言假定通过作用域运算符访问的名字不是类型。因此，如果我们希望使用一个模板类型参数的类型成员，就必须显式告诉编译器该名字是一个类型。我们通过使用关键字 typename 来实现这一点：
+
+```C++
+template <typename T>
+typename T::value_type top (const T& c){
+	if(!c.empty())
+		return c.back();
+  else
+		return typename T::value_type();
+}
+```
+
+我们的 top 函数期待一个容器类型的实参，它使用 typename 指明其返回类型并在 c 中没有元素时生成一个值初始化的元素（参见7.5.3节）返回给调用者。
+
+> Note! 当我们希望通知编译器一个名字表示类型时，必须使用关键字 typename，而不能使用 class。
+
+#### 默认模板实参
+
+就像我们能为函数参数提供默认实参一样（参见6.5.1 节），我们也可以提供默认模板实参。在新标准中，我们可以为函数和类模板提供默认实参。而更早的C++ 标准只允许为类模板提供默认实参。
+
+例如，我们重写 compare，默认使用标准库的 less 函数对象模板（参见14.8.2节）：
+
+```c++
+// compare 有一个默认模板实参 less<T> 和一个默认函数实参 F() 
+template <typename T, typename F = less<T>> 
+int compare(const T &vl, const T &v2, F f = F())
+{
+  if (f(vl, v2)) return -1;
+  if (f(v2, v1)) return 1;
+  return 0;
+}
+```
+
+在这段代码中，我们为模板添加了第二个类型参数，名为 F，表示可调用对象（参见10.3.2 节）的类型；并定义了一个新的函数参数 f，绑定到一个可调用对象上。
+
+我们为此模板参数提供了默认实参，并为其对应的函数参数也提供了默认实参。默认模板实参指出 compare 将使用标准库的 less 函数对象类，它是使用与compare 一样的类型参数实例化的。默认函数实参指出 f 将是类型 F 的一个默认初始化的对象。
+
+当用户调用这个版本的 compare 时，可以提供自己的比较操作，但这并不是必需的：
+
+```C++
+bool i = compare(0, 42); // 使用less; i为-1 
+// 结果依赖于iteml和item2中的 isbn 
+Sales_data iteml(cin), item2(cin);
+bool j = compare(iteml, item2, compareIsbn);
+```
+
+第一个调用使用默认函数实参，即，类型 less<T> 的一个默认初始化对象。在此调用中，T 为 int，因此可调用对象的类型为 less<int>。compare 的这个实例化版本将使用 less<int> 进行比较操作。
+
+在第二个调用中，我们传递给 compare 三个实参：compareIsbn（参见11.2.2节）和两个 Sales_data 类型的对象。当传递给 compare 三个实参时，第三个实参的类型必须是一个可调用对象，该可调用对象的返回类型必须能转换为 bool值，且接受的实参类型必须与 compare 的前两个实参的类型兼容。与往常一样，模板参数的类型从它们对应的函数实参推断而来。在此调用中，T 的类型被推断为 Sales_data，F 被推断为 compareIsbn 的类型。
+
+与函数默认实参一样，对于一个模板参数，只有当它右侧的所有参数都有默认实参时，它才可以有默认实参。
+
+#### 模板默认实参与类模板
+
+无论何时使用一个类模板，我们都必须在模板名之后接上尖括号。尖括号指出类必须从一个模板实例化而来。特别是，如果一个类模板为其所有模板参数都提供了默认实参，且我们希望使用这些默认实参，就必须在模板名之后跟一个空尖括号对：
+
+```C++
+template <class T = int> class Numbers { // T默认为 int 
+public:
+	Numbers(T v = 0): val(v) {}
+  // 对数值的各种操作
+private:
+	T val;
+};
+Numbers<long double> lots_of_precision;
+Numbers<> average_precision;  //空<>表示我们希望使用默认类型
+```
+
+此例中我们实例化了两个 Numbers 版本：average_precision 是用 int 代替 T 实例化得到的；lots_of_precision 是用 long double 代替 T 实例化而得到的。
+
+### 16.1.4 成员模板
+
+一个类（无论是普通类还是类模板）可以包含本身是模板的成员函数。这种成员被称为成员模板。**成员模板不能是虚函数**。
+
+#### 普通（非模板）类的成员模板
+
+作为普通类包含成员模板的例子，我们定义一个类，类似 unique_ptr 所使用的默认删除器类型（参见12.1.5节）。类似默认删除器，我们的类将包含一个重载的函数调用运算符（参见14.8 节），它接受一个指针并对此指针执行 delete。与默认删除器不同，我们的类还将在删除器被执行时打印一条信息。由于希望删除器适用于任何类型，所以我们将调用运算符定义为一个模板：
+
+```c++
+// 函数对象类，对给定指针执行 delete 
+class DebugDelete {
+public:
+	DebugDelete(std::ostream &s = std::cerr): os(s) { }
+  // 与任何函数模板相同，T 的类型由编译器推断
+template <typename T> void operator()(T *p) const
+	{ os << "deleting unique ptr" << std::endl; delete p;}
+private:
+	std::ostream &os;
+};
+```
+
+与任何其他模板相同，成员模板也是以模板参数列表开始的。每个 DebugDelete 对象都有一个 ostream 成员，用于写入数据；还包含一个自身是模板的成员函数。我们可以用这个类代替delete：
+
+```C++
+double* p = new double;
+DebugDelete d;// 可像 delete 表达式一样使用的对象
+d(p); // 调用 DebugDelete∶∶operator()(double*),释放p 
+int* ip = new int;
+// 在一个临时 DebugDelete 对象上调用 operator()(int*)
+DebugDelete()(ip);
+```
+
+由于调用一个 DebugDelete 对象会 delete 其给定的指针，我们也可以将DebugDelete 用作 unique_ptr 的删除器。为了重载 unique_ptr 的删除器，我们在尖括号内给出删除器类型，并提供一个这种类型的对象给 unique_ptr 的构造函数（参见12.1.5节）：
+
+```C++
+// 销毁p指向的对象
+// 实例化 DebugDelete∶∶operator()<int>(int *)
+unique_ptr<int,DebugDelete> p(new int, DebugDelete());
+//销毁 sp指向的对象
+// 实例化 DebugDelete∶∶operator()<string>(string*)
+unique_ptr<string,DebugDelete> sp(new string,DebugDelete());
+```
+
+在本例中，我们声明 p 的删除器的类型为 DebugDelete，并在 p 的构造函数中提供了该类型的一个未命名对象。
+
+unique_ptr 的析构函数会调用 DebugDelete 的调用运算符。因此，无论何时unique_ptr 的析构函数实例化时，DebugDelete 的调用运算符都会实例化：因此，上述定义会这样实例化。
+
+```C++
+// DebugDelete 的成员模板实例化样例
+void DebugDelete::operator()(int *p) const { delete p; }
+void DebugDelete::operator()(string *p) const { delete p;}
+```
+
+#### 类模板的成员模板
+
+对于类模板，我们也可以为其定义成员模板。在此情况下，类和成员各自有自己的、独立的模板参数。
+
+例如，我们将为 Blob 类定义一个构造函数，它接受两个迭代器，表示要拷贝的元素范围。由于我们希望支持不同类型序列的迭代器，因此将构造函数定义为模板：
+
+```C++
+template <typename T> class Blob {
+	template <typename It> Blob (It b, It e);
+  //... 
+};
+```
+
+此构造函数有自己的模板类型参数 It，作为它的两个函数参数的类型。
+
+与类模板的普通函数成员不同，成员模板是函数模板。当我们在类模板外定义一个成员模板时，必须同时为类模板和成员模板提供模板参数列表。类模板的参数列表在前，后跟成员自己的模板参数列表：
+
+```C++
+template <typename T>  // 类的类型参数
+template <typename It> // 构造函数的类型参数
+Blob<T>::Blob(It b,It e):
+data(std::make_shared<std::vector<T>>(b, e)) {}
+```
+
+在此例中，我们定义了一个类模板的成员，类模板有一个模板类型参数，命名为T。而成员自身是一个函数模板，它有一个名为 It 的类型参数。
+
+#### 实例化与成员模板
+
+为了实例化一个类模板的成员模板，我们必须同时提供类和函数模板的实参。与往常一样，我们在哪个对象上调用成员模板，编译器就根据该对象的类型来推断类模板参数的实参。与普通函数模板相同，编译器通常根据传递给成员模板的函数实参来推断它的模板实参（参见16.1.1节）：
+
+```C++
+int ia[] ={0,1,2,3,4,5,6,7,8,9};
+vector<long> vi = {0,1,2,3,4,5,6,7,8,9};
+list<const char*> w ={"now","is","the","time"};
+// 实例化 Blob<int>类及其接受两个 int*参数的构造函数
+Blob<int> al(begin(ia), end(ia));
+// 实例化Blob<int>类的接受两个 vector<long>∶∶iterator的构造函数
+Blob<int> a2(vi.begin(), vi.end());
+// 实例化Blob<string>及其接受两个list<const char*>∶∶iterator参数的构造函数
+Blob<string> a3(w.begin(), w.end());
+```
+
+当我们定义 a1 时，显式地指出编译器应该实例化一个 int 版本的 Blob。构造函数自己的类型参数则通过 begin(ia) 和 end(ia) 的类型来推断，结果为 int*。因此，a1 的定义实例化了如下版本：
+
+```C++
+Blob<int>::Blob(int*, int*);
+```
+
+a2 的定义使用了已经实例化了的 Blob<int> 类，并用 vector<long>::iterator 替换 It 来实例化构造函数。a3 的定义（显式地）实例化了一个 string 版本的 Blob，并（隐式地）实例化了该类的成员模板构造函数，其模板参数被绑定到 list<const char*>。
+
+### 16.1.5 控制实例化
+
+当模板被使用时才会进行实例化（参见16.1.1 节）这一特性意味着，相同的实例可能出现在多个对象文件中。当两个或多个独立编译的源文件使用了相同的模板，并提供了相同的模板参数时，每个文件中就都会有该模板的一个实例。
+
+在大系统中，在多个文件中实例化相同模板的额外开销可能非常严重。在新标准中，我们可以通过显式实例化（explicit instantiation）来避免这种开销。一个显式实例化有如下形式：
+
+```C++
+extern template declaration;  //实例化声明
+template declaration;  //实例化定义
+```
+
+declaration 是一个类或函数声明，其中所有模板参数已被替换为模板实参。例如，
+
+```C++
+// 实例化声明与定义
+extern template class Blob<string>;  //声明
+template int compare(const int&，const int&); // 定义
+```
+
+当编译器遇到 extern 模板声明时，它不会在本文件中生成实例化代码。将一个实例化声明为 extern 就表示承诺在程序其他位置有该实例化的一个非 extern 声明（定义）。对于一个给定的实例化版本，可能有多个 extern 声明，但必须只有一个定义。
+
+由于编译器在使用一个模板时自动对其实例化，因此 extern 声明必须出现在任何使用此实例化版本的代码之前：
+
+```C++
+// Application.cc
+// 这些模板类型必须在程序其他位置进行实例化
+extern template class Blob<string>;
+extern template int compare(const int&,const int&);
+Blob<string> sal, sa2; // 实例化会出现在其他位置
+// Blob<int>及其接受 initializer_list的构造函数在本文件中实例化
+Blob<int> al ={0,1,2,3,4,5,6,7,8,9};
+Blob<int> a2(al); // 拷贝构造函数在本文件中实例化
+int i = compare(al[0], a2[0]); // 实例化出现在其他位置
+```
+
+文件 Application.o 将包含 Blob<int> 的实例及其接受 initializer_list 参数的构造函数和拷贝构造函数的实例。而 compare<int> 函数和 Blob<string> 类将不在本文件中进行实例化。这些模板的定义必须出现在程序的其他文件中：
+
+```C++
+// templateBuild.cc
+// 实例化文件必须为每个在其他文件中声明为 extern 的类型和函数提供一个（非extern）的定义
+template int compare(const int&, const int&);
+template class Blob<string>; // 实例化类模板的所有成员
+```
+
+当编译器遇到一个实例化定义（与声明相对）时，它为其生成代码。因此，文件templateBuild.o 将会包含 compare 的 int 实例化版本的定义和 Blob<string>类的定义。当我们编译此应用程序时，必须将 templateBuild.o 和 Application.o链接到一起。
+
+> WARNING! 对每个实例化声明，在程序中某个位置必须有其显式的实例化定义。
+
+#### 实例化定义会实例化所有成员
+
+一个类模板的实例化定义会实例化该模板的所有成员，包括内联的成员函数。当编译器遇到一个实例化定义时，它不了解程序使用哪些成员函数。因此，与处理类模板的普通实例化不同，编译器会实例化该类的所有成员。即使我们不使用某个成员，它也会被实例化。因此，我们用来显式实例化个类模板的类型，必须能用于模板的所有成员。
+
+> Note! 在一个类模板的实例化定义中，所用类型必须能用于模板的所有成员函数。
+
+### 16.1.6 效率与灵活性
+
+对模板设计者所面对的设计选择，标准库智能指针类型（参见12.1 节）给出了一个很好的展示。
+
+shared_ptr 和 unique_ptr 之间的明显不同是它们管理所保存的指针的策略——前者给予我们共享指针所有权的能力；后者则独占指针。这一差异对两个类的功能来说是至关重要的。
+
+这两个类的另一个差异是它们允许用户重载默认删除器的方式。我们可以很容易地重载一个 shared_ptr 的删除器，只要在创建或 reset 指针时传递给它一个可调用对象即可。与之相反，删除器的类型是一个 unique_ptr 对象的类型的一部分。用户必须在定义 unique_ptr 时以显式模板实参的形式提供删除器的类型。因此，对于 unique_ptr 的用户来说，提供自己的删除器就更为复杂。
+
+如何处理删除器的差异实际上就是这两个类功能的差异。但是，如我们将要看到的，这一实现策略上的差异可能对性能有重要影响。
+
+#### 在运行时绑定删除器
+
+虽然我们不知道标准库类型是如何实现的，但可以推断出，shared_ptr 必须能直接访问其删除器。即，删除器必须保存为一个指针或一个封装了指针的类（如 function，参见14.8.3节）。
+
+我们可以确定 shared_ptr 不是将删除器直接保存为一个成员，因为删除器的类型直到运行时才会知道。实际上，在一个 shared_ptr 的生存期中，我们可以随时改变其删除器的类型。我们可以使用一种类型的删除器构造一个 shared_ptr，随后使用 reset 赋予此 shared_ptr 另一种类型的删除器。通常，类成员的类型在运行时是不能改变的。因此，不能直接保存删除器。
+
+为了考察删除器是如何正确工作的，让我们假定 shared_ptr 将它管理的指针保存在一个成员 p 中，且删除器是通过一个名为 del 的成员来访问的。则 shared_ptr 的析构函数必须包含类似下面这样的语句：
+
+```C++
+// del的值只有在运行时才知道;通过一个指针来调用它
+del ? del(p) : delete p; // del(p)需要运行时跳转到 del的地址
+```
+
+由于删除器是间接保存的，调用 del(p) 需要一次运行时的跳转操作，转到 del 中保存的地址来执行对应的代码。
+
+#### 在编译时绑定删除器
+
+现在，让我们来考察 unique_ptr 可能的工作方式。在这个类中，删除器的类型是类类型的一部分。即，unique_ptr 有两个模板参数，一个表示它所管理的指针，另一个表示删除器的类型。由于删除器的类型是 unique_ptr 类型的一部分，因此删除器成员的类型在编译时是知道的，从而删除器可以直接保存在 unique_ptr 对象中。
+
+unique_ptr 的析构函数与 shared_ptr 的析构函数类似，也是对其保存的指针调用用户提供的删除器或执行delete：
+
+```C++
+// del在编译时绑定;直接调用实例化的删除器
+del(p); // 无运行时额外开销
+```
+
+del 的类型或者是默认删除器类型，或者是用户提供的类型。到底是哪种情况没有关系，应该执行的代码在编译时肯定会知道。实际上，如果删除器是类似 DebugDelete（参见16.1.4 节）之类的东西，这个调用甚至可能被编译为内联形式。
+
+通过在编译时绑定删除器，unique_ptr 避免了间接调用删除器的运行时开销。通过在运行时绑定删除器，shared_ptr 使用户重载删除器更为方便。
+
+## 16.2 模板实参推断
+
+我们已经看到，对于函数模板，编译器利用调用中的函数实参来确定其模板参数。从函数实参来确定模板实参的过程被称为模板实参推断。在模板实参推断过程中，编译器使用函数调用中的实参类型来寻找模板实参，用这些模板实参生成的函数版本与给定的函数调用最为匹配。
+
+### 16.2.1 类型转换与模板类型参数
+
+与非模板函数一样，我们在一次调用中传递给函数模板的实参被用来初始化函数的形参。如果一个函数形参的类型使用了模板类型参数，那么它采用特殊的初始化规则。只有很有限的几种类型转换会自动地应用于这些实参。编译器通常不是对实参进行类型转换，而是生成一个新的模板实例。
+
+与往常一样，顶层 const（参见2.4.3节）无论是在形参中还是在实参中，都会被忽略。在其他类型转换中，能在调用中应用于函数模板的包括如下两项。
+
+- const 转换：可以将一个非 const 对象的引用（或指针）传递给一个 const 的引用（或指针）形参（参见4.11.2节）。
+- 数组或函数指针转换：如果函数形参不是引用类型，则可以对数组或函数类型的实参应用正常的指针转换。一个数组实参可以转换为一个指向其首元素的指针。类似的，一个函数实参可以转换为一个该函数类型的指针（参见 4.11.2节）。
+
+其他类型转换，如算术转换（参见 4.11.1 节）、派生类向基类的转换（参见 15.2.2 节）以及用户定义的转换（参见7.5.4节和14.9节），都不能应用于函数模板。
+
+作为一个例子，考虑对函数 fobi 和 fref 的调用。fobi 函数拷贝它的参数，而 fref 的参数是引用类型：
+
+```C++
+template <typename T> T fobj（T，T）;// 实参被拷贝
+template <typename T> T fref（const T&，const T&）;// 引用
+string sl("a value");
+const string s2 ("another value");
+fobj(s1,s2);  // 调用 fobj(string，string); const 被忽略
+fref(sl,s2);  // 调用 fref(const string&，const string&)
+							//将 s1转换为const是允许的
+int a[10], b[42];
+fobj(a,b); //调用f（int*，int*）
+fref(a,b); // 错误∶数组类型不匹配
+```
+
+在第一对调用中，我们传递了一个 string 和一个 const string。虽然这些类型不严格匹配，但两个调用都是合法的。在 fobi 调用中，实参被拷贝，因此原对象是否是 const 没有关系。在 fref 调用中，参数类型是 const 的引用。对于一个引用参数来说，转换为 const 是允许的，因此这个调用也是合法的。
+
+在下一对调用中，我们传递了数组实参，两个数组大小不同，因此是不同类型。在 fobj 调用中，数组大小不同无关紧要。两个数组都被转换为指针。fobj 中的模板类型为 int*。但是，fref 调用是不合法的。**如果形参是一个引用，则数组不会转换为指针**（参见6.2.4节）。a 和 b 的类型是不匹配的，因此调用是错误的。
+
+> Note! 将实参传递给带模板类型的函数形参时，能够自动应用的类型转换只有 const 转换及数组或函数到指针的转换。
+
+#### 使用相同模板参数类型的函数形参
+
+一个模板类型参数可以用作多个函数形参的类型。由于只允许有限的几种类型转换，因此传递给这些形参的实参必须具有相同的类型。如果推断出的类型不匹配，则调用就是错误的。例如，我们的 compare 函数（参见16.1.1 节）接受两个 const T& 参数，其实参必须是相同类型：
+
+```C++
+long lng;
+compare(1ng，1024); // 错误∶不能实例化compare(long，int)
+```
+
+此调用是错误的，因为传递给 compare 的实参类型不同。从第一个函数实参推断出的模板实参为 long，从第二个函数实参推断出的模板实参为 int。这些类型不匹配，因此模板实参推断失败。
+
+如果希望允许对函数实参进行正常的类型转换，我们可以将函数模板定义为两个类型参数：
+
+```C++
+// 实参类型可以不同，但必须兼容
+template <typename A,typename B>
+int flexibleCompare(const A& vl, const B& v2)
+{
+  if (v1 < v2) return -1;
+  if (v2 < v1) return 1;
+  return 0;
+}
+```
+
+现在用户可以提供不同类型的实参了：
+
+```C++
+long lng;
+flexibleCompare(lng，1024); // 正确∶调用 flexibleCompare（long，int）
+```
+
+当然，必须定义了能比较这些类型的值的 < 运算符。
