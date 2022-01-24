@@ -1173,7 +1173,7 @@ char *pc = reinterpret_cast<char*>(ip);
 
 ### 5.3.2 switch语句
 
-case关键字和它对应的值一起被成为**case标签**。case标签必须是整型常量表达式：
+case关键字和它对应的值一起被称为**case标签**。case标签必须是整型常量表达式：
 
 ```C++
 char ch = getVal();
@@ -1183,6 +1183,42 @@ switch(ch) {
   case ival: // 错误：case标签不是常量
 }
 ```
+
+请记住整型常量这四个字，不满足这个特性的不能作为case值，编译会报错。这也决定了switch的参数必须是整型的。整型，意味着浮点数是不合法的，如case 3.14：不可以；常量，意味着变量是不合法的，如case ival： ival不能是变量。
+
+1. C++中的const int，注意仅限于C++中的const，C中的const是只读变量，不是常量；
+
+2. 单个字符，如case 'a': 是合法的，因为文字字符是常量，被转成ASCII码，为整型；
+
+3. 使用#define定义的整型，#define定义的一般为常量，比如#define pi 3.14，但是也必须是整型才可以；
+
+4. 使用enum定义的枚举成员。因为枚举成员是const的，且为整型。如果不手动指定枚举值，则默认枚举值为从0开始，依次加1。如下这段代码正常运行：
+
+   ```C++
+   #include<iostream>
+   using namespace std;
+   enum color{red,yellow,green};
+   int main()
+   {
+       int co = 2;
+       switch(co)
+       {
+       	case red:
+           cout<<"red"<<endl;
+           break;
+       	case yellow:
+           cout<<"yellow"<<endl;
+           break;
+       	case green:
+           cout<<"green"<<endl;
+           break;
+       	default:
+           cout<<"no match color"<<endl;
+           break;
+       }
+       return 0;
+   }
+   ```
 
 ## 5.6 try语句块和异常处理
 
